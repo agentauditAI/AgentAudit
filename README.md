@@ -158,7 +158,13 @@ AgentAudit directly addresses logging and transparency requirements:
 - **AgentPay** *(coming soon)* — Programmable payment vaults for AI agents
 
 ---
+## Deployment
 
+- **Contract:** `AuditVault.sol`
+- **Network:** Mantle Sepolia Testnet
+- **Address:** `0x25ac2ab1369001F9C847e65f010B6e4f4340d78a`
+- **Explorer:** https://sepolia.mantlescan.xyz/address/0x25ac2ab1369001F9C847e65f010B6e4f4340d78a
+- **Verification:** Sourcify ✅
 ## License
 
 MIT © AgentAudit Contributors
