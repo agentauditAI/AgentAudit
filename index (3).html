@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentAudit — On-Chain Audit Logs for AI Agents</title>
+  <meta name="description" content="Immutable on-chain audit logs for AI agents. EU AI Act compliant. Every action traceable, tamper-proof, auditable." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0f0a;
+      --surface: #0f160f;
+      --border: #1a2a1a;
+      --green: #00ff88;
+      --green-dim: #00cc6a;
+      --green-glow: rgba(0,255,136,0.12);
+      --amber: #ffb800;
+      --text: #e8f5e8;
+      --text-dim: #7a9e7a;
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      overflow-x: hidden;
+    }
+
+    /* ── Grid background ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 2.5rem;
+      background: rgba(10,15,10,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--green);
+      letter-spacing: 0.05em;
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--green); }
+
+    /* ── Hero ── */
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 8rem 2rem 4rem;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--green);
+      background: var(--green-glow);
+      border: 1px solid rgba(0,255,136,0.25);
+      border-radius: 2px;
+      padding: 0.35rem 0.85rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 2rem;
+    }
+
+    .badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    h1 {
+      font-family: var(--sans);
+      font-size: clamp(1.9rem, 4.5vw, 3.4rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+      max-width: 900px;
+    }
+
+    h1 span { color: var(--green); }
+
+    .tagline {
+      font-family: var(--mono);
+      font-size: clamp(0.9rem, 2vw, 1.1rem);
+      color: var(--text-dim);
+      max-width: 560px;
+      line-height: 1.7;
+      margin-bottom: 3rem;
+    }
+
+    .cta-group {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--bg);
+      background: var(--green);
+      border: none;
+      padding: 0.85rem 2rem;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .btn-primary:hover {
+      background: var(--green-dim);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      background: transparent;
+      border: 1px solid var(--border);
+      padding: 0.85rem 2rem;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    /* ── Log stream animation ── */
+    .log-stream {
+      margin-top: 5rem;
+      width: 100%;
+      max-width: 700px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1.5rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      text-align: left;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .log-stream::before {
+      content: 'LIVE AUDIT LOG';
+      position: absolute;
+      top: 1rem; right: 1rem;
+      font-size: 0.65rem;
+      color: var(--green);
+      letter-spacing: 0.1em;
+    }
+
+    .log-line {
+      display: flex;
+      gap: 1rem;
+      padding: 0.3rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      opacity: 0;
+      animation: fadeIn 0.4s forwards;
+    }
+
+    .log-line:last-child { border-bottom: none; }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    .log-time { color: var(--text-dim); min-width: 85px; }
+    .log-action { color: var(--green); min-width: 180px; }
+    .log-hash { color: var(--amber); }
+
+    /* ── Sections ── */
+    section {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 6rem 2rem;
+    }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--green);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    h2 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .section-sub {
+      font-family: var(--mono);
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      max-width: 540px;
+      margin-bottom: 3rem;
+    }
+
+    /* ── Feature grid ── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .feature {
+      background: var(--surface);
+      padding: 2rem;
+    }
+
+    .feature-icon {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .feature h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.01em;
+    }
+
+    .feature p {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* ── EU AI Act table ── */
+    .compliance-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      margin-top: 2rem;
+    }
+
+    .compliance-table th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      color: var(--text-dim);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .compliance-table td {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .compliance-table td:first-child {
+      color: var(--green);
+      white-space: nowrap;
+    }
+
+    .compliance-table tr:last-child td { border-bottom: none; }
+
+    /* ── Code block ── */
+    .code-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1.5rem;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      line-height: 1.7;
+      overflow-x: auto;
+      margin-top: 2rem;
+    }
+
+    .code-block .kw { color: var(--green); }
+    .code-block .str { color: var(--amber); }
+    .code-block .cmt { color: var(--text-dim); }
+    .code-block .fn { color: #88ddff; }
+
+    /* ── Footer ── */
+    footer {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid var(--border);
+      padding: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--green); }
+
+    @media (max-width: 640px) {
+      nav { padding: 1rem 1.5rem; }
+      .nav-links { display: none; }
+      footer { flex-direction: column; gap: 1rem; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="#">AgentAudit</a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#compliance">EU AI Act</a></li>
+      <li><a href="#quickstart">SDK</a></li>
+      <li><a href="https://github.com/agentaudit-lab/AgentAudit" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="badge">EU AI Act Compliant · On-Chain Logging</div>
+
+    <h1>Every agent action.<br /><span>Immutably logged.</span></h1>
+
+    <p class="tagline">
+      August 2, 2026. Your AI agents go on trial.<br />Do you have the evidence?
+    </p>
+
+    <div class="cta-group">
+      <a href="https://github.com/agentauditAI/AgentAudit" class="btn-primary" target="_blank">View on GitHub</a>
+      <a href="#quickstart" class="btn-ghost">Quick Start</a>
+    </div>
+
+    <!-- Animated log stream -->
+    <div class="log-stream" id="logStream">
+      <div class="log-line" style="animation-delay:0.2s">
+        <span class="log-time">13:42:07</span>
+        <span class="log-action">TRANSFER_APPROVED</span>
+        <span class="log-hash">0x3f8a...c291</span>
+      </div>
+      <div class="log-line" style="animation-delay:0.6s">
+        <span class="log-time">13:42:11</span>
+        <span class="log-action">POLICY_CHECK_PASSED</span>
+        <span class="log-hash">0x7d1b...f044</span>
+      </div>
+      <div class="log-line" style="animation-delay:1.0s">
+        <span class="log-time">13:42:19</span>
+        <span class="log-action">SPEND_LIMIT_ENFORCED</span>
+        <span class="log-hash">0xa92c...3e17</span>
+      </div>
+      <div class="log-line" style="animation-delay:1.4s">
+        <span class="log-time">13:42:33</span>
+        <span class="log-action">AUDIT_LOG_WRITTEN</span>
+        <span class="log-hash">0x55fe...09ab</span>
+      </div>
+      <div class="log-line" style="animation-delay:1.8s">
+        <span class="log-time">13:42:41</span>
+        <span class="log-action">COMPLIANCE_VERIFIED</span>
+        <span class="log-hash">0xc7d9...881f</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="section-label">// Why AgentAudit</div>
+    <h2>Audit logs that can't be altered.</h2>
+    <p class="section-sub">
+      Off-chain logs can be modified. Databases can be wiped.
+      On-chain logs are permanent by design.
+    </p>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🔗</div>
+        <h3>Immutable Storage</h3>
+        <p>Every action written to the blockchain. No admin key. No delete function. No exceptions.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🕐</div>
+        <h3>Tamper-Proof Timestamps</h3>
+        <p>Block timestamps and block numbers provide cryptographic proof of when each action occurred.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🇪🇺</div>
+        <h3>EU AI Act Ready</h3>
+        <p>Satisfies Articles 12, 13, 14, and 17 logging requirements out of the box.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⚡</div>
+        <h3>TypeScript SDK</h3>
+        <p>Drop-in integration for any AI agent runtime. Two lines of code to start logging.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔍</div>
+        <h3>Per-Agent Queries</h3>
+        <p>Query full audit history for any agent address. Filter, export, verify.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🌐</div>
+        <h3>Multi-Chain</h3>
+        <p>Live on Mantle. Arbitrum, Base, and more coming. Same SDK, any chain.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- EU AI ACT -->
+  <section id="compliance">
+    <div class="section-label">// Compliance</div>
+    <h2>Built for EU AI Act.</h2>
+    <p class="section-sub">
+      High-risk AI systems must maintain logs. AgentAudit makes compliance automatic.
+    </p>
+    <table class="compliance-table">
+      <thead>
+        <tr>
+          <th>Article</th>
+          <th>Requirement</th>
+          <th>How AgentAudit Satisfies It</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Art. 12</td>
+          <td>Record-keeping for high-risk AI systems</td>
+          <td>Immutable on-chain log per every agent action</td>
+        </tr>
+        <tr>
+          <td>Art. 13</td>
+          <td>Transparency and information to users</td>
+          <td>Every action timestamped and publicly readable on-chain</td>
+        </tr>
+        <tr>
+          <td>Art. 14</td>
+          <td>Human oversight capability</td>
+          <td>Full audit trail queryable by any operator or regulator</td>
+        </tr>
+        <tr>
+          <td>Art. 17</td>
+          <td>Quality management system documentation</td>
+          <td>Structured metadata field per log entry for full context</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- QUICKSTART -->
+  <section id="quickstart">
+    <div class="section-label">// SDK</div>
+    <h2>Two lines to start logging.</h2>
+    <p class="section-sub">
+      Install the SDK, point it at your deployed contract, and every agent action is on-chain.
+    </p>
+    <div class="code-block">
+      <span class="cmt">// Install</span><br />
+      npm install @agentaudit/sdk<br />
+      <br />
+      <span class="cmt">// Usage</span><br />
+      <span class="kw">import</span> { AgentAudit } <span class="kw">from</span> <span class="str">'@agentaudit/sdk'</span>;<br />
+      <br />
+      <span class="kw">const</span> audit = <span class="kw">new</span> <span class="fn">AgentAudit</span>({<br />
+      &nbsp;&nbsp;contractAddress: <span class="str">'0x...'</span>,<br />
+      &nbsp;&nbsp;rpcUrl: <span class="str">'https://rpc.sepolia.mantle.xyz'</span>,<br />
+      &nbsp;&nbsp;privateKey: process.env.<span class="fn">AGENT_PRIVATE_KEY</span>,<br />
+      });<br />
+      <br />
+      <span class="cmt">// Log an action — returns txHash + logIndex</span><br />
+      <span class="kw">const</span> receipt = <span class="kw">await</span> audit.<span class="fn">log</span>({<br />
+      &nbsp;&nbsp;action: <span class="str">'TRANSFER_APPROVED'</span>,<br />
+      &nbsp;&nbsp;metadata: { amount: <span class="str">'100 USDC'</span>, recipient: <span class="str">'0x...'</span> },<br />
+      });<br />
+      <br />
+      console.<span class="fn">log</span>(receipt.txHash); <span class="cmt">// on-chain proof ✅</span>
+    </div>
+  </section>
+
+  <footer>
+    <span>AgentAudit · MIT License</span>
+    <span>
+      <a href="https://github.com/agentaudit-lab/AgentAudit" target="_blank">GitHub</a>
+      &nbsp;·&nbsp;
+      <a href="https://getshieldai.xyz" target="_blank">ShieldAI</a>
+    </span>
+  </footer>
+
+</body>
+</html>
