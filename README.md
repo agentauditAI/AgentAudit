@@ -165,6 +165,12 @@ AgentAudit directly addresses logging and transparency requirements:
 - **Address:** `0x25ac2ab1369001F9C847e65f010B6e4f4340d78a`
 - **Explorer:** https://sepolia.mantlescan.xyz/address/0x25ac2ab1369001F9C847e65f010B6e4f4340d78a
 - **Verification:** Sourcify ✅
-## License
 
-MIT © AgentAudit Contributors
+---
+
+## Documentation
+- [Payload best practices — privacy without losing compliance](docs/payload-best-practices.md)
+-
+## License
+-
+- MIT © AgentAudit Contributors
