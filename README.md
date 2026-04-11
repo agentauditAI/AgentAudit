@@ -164,6 +164,9 @@ AgentAudit directly addresses logging and transparency requirements:
 - **Network:** Mantle Sepolia Testnet
 - **Address:** `0x25ac2ab1369001F9C847e65f010B6e4f4340d78a`
 - **Explorer:** https://sepolia.mantlescan.xyz/address/0x25ac2ab1369001F9C847e65f010B6e4f4340d78a
+- **Network:** Arbitrum Sepolia Testnet
+- **Address:** `0x25ac2ab1369001F9C847e65f010B6e4f4340d78a`
+- **Explorer:** https://sepolia.arbiscan.io/address/0x25ac2ab1369001F9C847e65f010B6e4f4340d78a
 - **Verification:** Sourcify ✅
 
 ---
