@@ -1,0 +1,17 @@
+{
+  "name": "plugin-elizaos",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@elizaos/core": "^2.0.0-alpha.77",
+    "dotenv": "^17.4.2",
+    "ethers": "^6.16.0"
+  }
+}
