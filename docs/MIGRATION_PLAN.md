@@ -1,31 +1,26 @@
 # AgentAudit — Migration & Consolidation Plan
 
-**Status:** Draft | **Last updated:** April 20, 2026 | **Owner:** Piotr + Ewelina
+**Status:** Phase 1 complete | **Last updated:** April 22, 2026 | **Owner:** Piotr + Ewelina
 
 This document outlines the migration from the current split-repo setup
-(`agentauditAI/AgentAudit` + `agentaudit-xyz/AgentAudit`) into a single
+(`agentauditAI/AgentAudit` + legacy dev repository) into a single
 consolidated repository with a clean Foundry + EAS-based v2 architecture.
 
 ---
 
 ## Context
 
-AgentAudit currently lives across two repositories:
+AgentAudit development initially lived across two repositories during the
+early prototyping phase. As the project matured, we consolidated all
+unique work into `agentauditAI/AgentAudit` — the public-facing repository
+hosting `getagentaudit.xyz` via GitHub Pages and linked in the NGI Zero
+Commons Fund grant application (Code: 2026-06-098).
 
-- **`agentauditAI/AgentAudit`** (this repo) — Public-facing, owned under the
-  `agentauditAI` organization. Hosts `getagentaudit.xyz` via GitHub Pages.
-  Linked in NGI Zero grant application (Code: 2026-06-098).
-  Contains: README, PITCH.md, docs/, sdk/src/, CNAME, index.html.
+The Mantle Mainnet deployment of AuditVault v1 lives at:
+`0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b`
 
-- **`agentaudit-xyz/AgentAudit`** — Development workspace. Contains the
-  actual working code: contracts/, plugin-elizaos/, scripts/ (including
-  Mantle Mainnet deploy), hardhat.config.js, package.json.
-  Mantle Mainnet deploy of AuditVault v1 lives at:
-  `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b`
-
-This split is not intentional — it's historical. Consolidation goal is to
-have one repository that grant reviewers, auditors, and integration
-partners can navigate end-to-end.
+Consolidation goal: have one repository that grant reviewers, auditors,
+and integration partners can navigate end-to-end.
 
 ---
 
@@ -42,38 +37,58 @@ partners can navigate end-to-end.
 
 ## Non-Goals
 
-- Rewriting SDK from scratch
-- Migrating Mantle Mainnet contract (v1 stays deployed as historical record)
+- Rewriting the SDK from scratch
+- Migrating the Mantle Mainnet contract (v1 stays deployed as historical record)
 - Building a "combined" product with enforcement layer — positioning is
   "on-chain evidence layer, complementary to enforcement tools like Nobulex"
-- Any work on personal/corporate device boundaries — all work happens in
-  GitHub Codespaces
 
 ---
 
 ## Migration Phases
 
-### Phase 0 — Prerequisites (Monday morning)
+### Phase 0 — Prerequisites
 
-- [ ] Review employment contract (IP clauses, non-compete)
-- [ ] Confirm Codespaces-only workflow is legally clean
-- [ ] Confirm both co-founders aligned on consolidation approach
+- [x] Confirm Codespaces-only workflow
+- [x] Confirm both co-founders aligned on consolidation approach
 
-### Phase 1 — Repository Consolidation (Tuesday)
+### Phase 1 — Repository Consolidation
 
-- [ ] Create branch `feat/consolidate-dev-workspace` in `agentauditAI/AgentAudit`
-- [ ] Copy from `agentaudit-xyz/AgentAudit`:
-  - [ ] `plugin-elizaos/` -> `plugins/elizaos/`
-  - [ ] `scripts/` -> `scripts/`
-  - [ ] `hardhat.config.js` -> root (as v1 legacy reference)
-  - [ ] `package.json`, `package-lock.json` -> root (merge if exists)
-  - [ ] `tsconfig.json` -> root
-- [ ] Update README.md with consolidated structure
-- [ ] Open PR, review, merge
-- [ ] Verify `getagentaudit.xyz` still works, GitHub Pages still deploys
-- [ ] Archive `agentaudit-xyz/AgentAudit` (Settings -> Danger Zone -> Archive)
+- [x] Create branch `feat/consolidate-dev-workspace` in `agentauditAI/AgentAudit`
+- [x] Copy unique files from legacy dev repository:
+  - `plugin-elizaos/`
+  - `scripts/` (including Mantle Mainnet deploy scripts)
+  - `hardhat.config.js` (legacy v1 config, reference)
+  - `package.json`, `package-lock.json`
+  - `tsconfig.json`
+- [x] Open PR, review, merge (PR #1, commit `09de925`)
+- [x] Verify `getagentaudit.xyz` still works, GitHub Pages still deploys
+- [x] Local main synced, feature branch deleted
 
-### Phase 2 — Folder Restructure (Wednesday)
+**Deferred tasks** (do not block Phase 2 start):
+
+- Archival of the legacy dev repository — pending access coordination. Tracked separately; will be completed before public launch of v2.
+- Update of the "GitHub" button in `getagentaudit.xyz/index.html` to point at `https://github.com/agentauditAI/AgentAudit` — moved into Phase 2 folder-restructure tasks.
+
+#### Draft — redirect notice for legacy repository
+
+When archival becomes possible, prepend the following markdown to the top of the legacy repository's `README.md`:
+
+~~~markdown
+# ⚠️ This Repository Has Moved
+
+**AgentAudit development has consolidated to [agentauditAI/AgentAudit](https://github.com/agentauditAI/AgentAudit).**
+
+Please use the new repository for:
+- Latest code and SDK
+- Documentation and grant materials
+- Issues, PRs, and contributions
+
+Website: [getagentaudit.xyz](https://getagentaudit.xyz)
+
+This repository is preserved as a historical reference and will be archived in the near future.
+~~~
+
+### Phase 2 — Folder Restructure
 
 Target structure:
 
@@ -88,23 +103,25 @@ Target structure:
 - `README.md`, `PITCH.md`, `LICENSE`
 
 Tasks:
+
 - [ ] Split existing KYA documentation into four separate documents
 - [ ] Rewrite README.md with clear positioning and architecture diagram
 - [ ] Add compatibility note for Nobulex integration
 - [ ] Document contract addresses per network
+- [ ] Update GitHub button link in `index.html`
 
-### Phase 3 — Foundry + EAS Setup (Thursday)
+### Phase 3 — Foundry + EAS Setup
 
 - [ ] Install Foundry in Codespace devcontainer
 - [ ] Set up `contracts/v2/` with Foundry project structure
 - [ ] Design EAS schemas:
-  - [ ] `AgentRegistration` (DID, owner, model fingerprint, prompt hash, capabilities)
-  - [ ] `AgentAuditBatch` (agent DID, Merkle root, sequence range, storage URI)
+  - `AgentRegistration` (DID, owner, model fingerprint, prompt hash, capabilities)
+  - `AgentAuditBatch` (agent DID, Merkle root, sequence range, storage URI)
 - [ ] Register schemas on easscan.org (Mantle Sepolia first)
 - [ ] Write AuditVault.sol v2 as thin EAS wrapper + agent registry
 - [ ] Scaffold Foundry tests (unit + fuzzing)
 
-### Phase 4 — Implementation (Friday + weekend)
+### Phase 4 — Implementation
 
 - [ ] Implement AuditVault.sol v2
 - [ ] Write Foundry tests (aim for high coverage)
@@ -113,7 +130,7 @@ Tasks:
 - [ ] Build reference example (minimal agent using v2 SDK)
 - [ ] Update README with v2 Sepolia address
 
-### Phase 5 — Post-Migration (Week 2)
+### Phase 5 — Post-Migration
 
 - [ ] Deploy v2 to Mantle Mainnet
 - [ ] Announce migration (tweet + Mirror post)
@@ -127,10 +144,9 @@ Tasks:
 
 | Risk | Mitigation |
 |------|------------|
-| Loss of Mantle Mainnet v1 deploy history | Keep contracts/v1 as legacy, document address in README |
+| Loss of Mantle Mainnet v1 deploy history | Keep `contracts/v1` as legacy, document address in README |
 | CNAME / GitHub Pages breaks during consolidation | Test in branch before merge to main |
-| agentaudit-xyz archival loses unreplicated content | Audit every file before archival |
-| Local SAMEY laptop retains project artifacts | Phase 0 cleanup: remove all AgentAudit folders and keys |
+| Legacy repo archival loses unreplicated content | Audit every file before archival (done in Phase 1) |
 | Migration happens during fatigued late-night session | Explicit rule: consolidation work only during fresh-head hours |
 
 ---
@@ -139,18 +155,17 @@ Tasks:
 
 - A new contributor can clone the repo, read README, and understand AgentAudit within 5 minutes
 - All code lives in one repository
-- agentaudit-xyz/AgentAudit is archived (read-only, preserved)
+- Legacy dev repository is archived (read-only, preserved)
 - EU AI Act Article 12/13/19/26 compliance mapping is documented
 - v2 contract is deployed on Mantle Sepolia with passing tests
-- Zero AgentAudit artifacts remain on SAMEY Robotics hardware
-- All future development happens exclusively in GitHub Codespaces
+- All development happens exclusively in GitHub Codespaces
 
 ---
 
 ## References
 
-- NGI Zero submission code: 2026-06-098
-- Current Mantle Mainnet AuditVault v1: `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b`
+- NGI Zero submission code: `2026-06-098`
+- Mantle Mainnet AuditVault v1: `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b`
 - Nobulex (complementary project): https://github.com/arian-gogani/nobulex
 - EAS documentation: https://docs.attest.org
 - Target legal framework: EU AI Act (Regulation 2024/1689), enforcement August 2, 2026
