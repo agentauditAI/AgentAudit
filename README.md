@@ -100,9 +100,9 @@ console.log('On-chain:', result.txHash)
     ├── sdk/
     │   └── src/index.ts
     ├── plugin-elizaos/
-    ├── website/
-    │   └── index.html
-    └── README.md
+    ├── index.html                  Landing page (getagentaudit.xyz)
+    ├── CNAME
+        └── README.md
 
 ## ElizaOS Integration
 
