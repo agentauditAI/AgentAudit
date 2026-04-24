@@ -48,11 +48,12 @@ See [docs/KYA_STANDARD.md](docs/KYA_STANDARD.md) for the full specification.
 
 ## Deployments
 
-| Network | Contract Address | Explorer |
-|---------|-----------------|----------|
-| **Mantle Mainnet** ✅ | `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b` | [View on Mantlescan](https://explorer.mantle.xyz/address/0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b) |
-| Mantle Sepolia | 🔄 Phase 3 | TBD |
-| Arbitrum One | 🔄 Planned | TBD |
+| Network | Contract | Address | Explorer |
+|---------|----------|---------|----------|
+| **Mantle Mainnet** ✅ | AuditVault v1 | `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b` | [View](https://explorer.mantle.xyz/address/0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b) |
+| **Mantle Mainnet** ✅ | AgentRegistration v2 | `0x68769980879414e8f264Ac15a87813E2ABaBaD6e` | [View](https://explorer.mantle.xyz/address/0x68769980879414e8f264Ac15a87813E2ABaBaD6e) |
+| **Mantle Mainnet** ✅ | AgentAuditBatch v2 | `0xAF9ccA0C3D79900576557329F57824A0e277` | [View](https://explorer.mantle.xyz/address/0xAF9ccA0C3D79900576557329F57824A0e277) |
+| Arbitrum One | All contracts | 🔄 Planned | — |
 
 ## Quick Start
 
