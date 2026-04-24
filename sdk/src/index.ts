@@ -1,150 +1,121 @@
-import { ethers } from 'ethers';
+import { ethers } from "ethers";
 
-// ─────────────────────────────────────────────────────────
-// ABI (minimal — only what the SDK needs)
-// ─────────────────────────────────────────────────────────
+// Contract addresses — Mantle Mainnet
+export const CONTRACTS = {
+  AUDIT_VAULT_V1: "0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b",
+  AGENT_REGISTRATION: "0x68769980879414e8f264Ac15a87813E2ABaBaD6e",
+  AGENT_AUDIT_BATCH: "0xAF9ccA0C3D79900576557329F57824A0e277",
+};
 
-const AUDIT_VAULT_ABI = [
-  'function logAction(string calldata action, string calldata metadata) external returns (uint256)',
-  'function getLog(uint256 index) external view returns (tuple(address agent, string action, string metadata, uint256 timestamp, uint256 blockNumber))',
-  'function totalLogs() external view returns (uint256)',
-  'function getAgentLogs(address agent) external view returns (tuple(address agent, string action, string metadata, uint256 timestamp, uint256 blockNumber)[])',
-  'event ActionLogged(uint256 indexed logIndex, address indexed agent, string action, uint256 timestamp)',
+export const MANTLE_RPC = "https://rpc.mantle.xyz";
+
+const REGISTRATION_ABI = [
+  "function registerAgent(string name, string complianceLevel, uint256 spendLimit, address auditVault) external returns (uint256 agentId)",
+  "function revokeAgent(uint256 agentId) external",
+  "function isActive(uint256 agentId) external view returns (bool)",
+  "function getOperatorAgents(address operator) external view returns (uint256[])",
+  "function agents(uint256) external view returns (string name, address operator, uint256 createdAt, string complianceLevel, uint256 spendLimit, address auditVault, bool revoked)"
 ];
 
-// ─────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────
+const AUDIT_BATCH_ABI = [
+  "function logAction(uint256 agentId, string actionType, bytes32 payloadHash) external",
+  "function logActionBatch(uint256 agentId, string[] actionTypes, bytes32[] payloadHashes) external",
+  "function getLogCount(uint256 agentId) external view returns (uint256)"
+];
 
 export interface AgentAuditConfig {
-  contractAddress: string;
-  rpcUrl: string;
   privateKey: string;
-}
-
-export interface LogEntry {
-  agent: string;
-  action: string;
-  metadata: string;
-  timestamp: number;
-  blockNumber: number;
+  rpcUrl?: string;
 }
 
 export interface LogActionParams {
-  action: string;
-  metadata: Record<string, unknown> | string;
+  agentId: number;
+  actionType: string;
+  payload: string;
 }
-
-export interface LogReceipt {
-  logIndex: number;
-  txHash: string;
-  blockNumber: number;
-  timestamp: number;
-}
-
-// ─────────────────────────────────────────────────────────
-// SDK
-// ─────────────────────────────────────────────────────────
 
 export class AgentAudit {
-  private contract: ethers.Contract;
   private provider: ethers.JsonRpcProvider;
   private wallet: ethers.Wallet;
+  private registration: ethers.Contract;
+  private auditBatch: ethers.Contract;
 
   constructor(config: AgentAuditConfig) {
-    this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    this.provider = new ethers.JsonRpcProvider(config.rpcUrl || MANTLE_RPC);
     this.wallet = new ethers.Wallet(config.privateKey, this.provider);
-    this.contract = new ethers.Contract(
-      config.contractAddress,
-      AUDIT_VAULT_ABI,
-      this.wallet
-    );
+    this.registration = new ethers.Contract(CONTRACTS.AGENT_REGISTRATION, REGISTRATION_ABI, this.wallet);
+    this.auditBatch = new ethers.Contract(CONTRACTS.AGENT_AUDIT_BATCH, AUDIT_BATCH_ABI, this.wallet);
   }
 
   /**
-   * Log an AI agent action on-chain.
-   * Returns a receipt with the log index and tx hash.
+   * Register a new AI agent on-chain (KYA standard)
    */
-  async log(params: LogActionParams): Promise<LogReceipt> {
-    const metadataStr =
-      typeof params.metadata === 'string'
-        ? params.metadata
-        : JSON.stringify(params.metadata);
-
-    const tx = await this.contract.logAction(params.action, metadataStr);
+  async registerAgent(
+    name: string,
+    complianceLevel: "minimal" | "limited" | "high" = "limited",
+    spendLimit: bigint = ethers.parseEther("100"),
+    auditVault: string = CONTRACTS.AUDIT_VAULT_V1
+  ): Promise<{ agentId: number; txHash: string }> {
+    const tx = await this.registration.registerAgent(name, complianceLevel, spendLimit, auditVault);
     const receipt = await tx.wait();
-
-    // Parse log index from emitted event
-    const iface = new ethers.Interface(AUDIT_VAULT_ABI);
-    let logIndex = 0;
-    for (const log of receipt.logs) {
-      try {
-        const parsed = iface.parseLog(log);
-        if (parsed && parsed.name === 'ActionLogged') {
-          logIndex = Number(parsed.args.logIndex);
-          break;
-        }
-      } catch {
-        // skip non-matching logs
-      }
-    }
-
-    return {
-      logIndex,
-      txHash: receipt.hash,
-      blockNumber: receipt.blockNumber,
-      timestamp: Math.floor(Date.now() / 1000),
-    };
+    const agentId = Number(await this.registration.agentCount());
+    return { agentId, txHash: tx.hash };
   }
 
   /**
-   * Retrieve a single log entry by its global index.
+   * Log a single agent action
    */
-  async getLog(index: number): Promise<LogEntry> {
-    const entry = await this.contract.getLog(index);
-    return this._formatEntry(entry);
+  async logAction({ agentId, actionType, payload }: LogActionParams): Promise<{ txHash: string }> {
+    const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payload));
+    const tx = await this.auditBatch.logAction(agentId, actionType, payloadHash);
+    await tx.wait();
+    return { txHash: tx.hash };
   }
 
   /**
-   * Total number of log entries ever written to the contract.
+   * Log multiple actions in one transaction (gas efficient)
    */
-  async totalLogs(): Promise<number> {
-    const total = await this.contract.totalLogs();
-    return Number(total);
+  async logActionBatch(
+    agentId: number,
+    actions: { actionType: string; payload: string }[]
+  ): Promise<{ txHash: string }> {
+    const actionTypes = actions.map((a) => a.actionType);
+    const payloadHashes = actions.map((a) => ethers.keccak256(ethers.toUtf8Bytes(a.payload)));
+    const tx = await this.auditBatch.logActionBatch(agentId, actionTypes, payloadHashes);
+    await tx.wait();
+    return { txHash: tx.hash };
   }
 
   /**
-   * All log entries written by a specific agent address.
+   * Get total log count for an agent
    */
-  async getAgentLogs(agentAddress: string): Promise<LogEntry[]> {
-    const entries = await this.contract.getAgentLogs(agentAddress);
-    return entries.map(this._formatEntry);
+  async getLogCount(agentId: number): Promise<number> {
+    return Number(await this.auditBatch.getLogCount(agentId));
   }
 
   /**
-   * Address of the connected wallet (operator).
+   * Check if agent is active
    */
-  get operatorAddress(): string {
-    return this.wallet.address;
+  async isActive(agentId: number): Promise<boolean> {
+    return this.registration.isActive(agentId);
   }
 
-  // ─────────────────────────────────────────────
-  // Internal helpers
-  // ─────────────────────────────────────────────
+  /**
+   * Revoke an agent
+   */
+  async revokeAgent(agentId: number): Promise<{ txHash: string }> {
+    const tx = await this.registration.revokeAgent(agentId);
+    await tx.wait();
+    return { txHash: tx.hash };
+  }
 
-  private _formatEntry(raw: {
-    agent: string;
-    action: string;
-    metadata: string;
-    timestamp: bigint;
-    blockNumber: bigint;
-  }): LogEntry {
-    return {
-      agent: raw.agent,
-      action: raw.action,
-      metadata: raw.metadata,
-      timestamp: Number(raw.timestamp),
-      blockNumber: Number(raw.blockNumber),
-    };
+  /**
+   * Get all agent IDs for the current operator
+   */
+  async getMyAgents(): Promise<number[]> {
+    const ids = await this.registration.getOperatorAgents(this.wallet.address);
+    return ids.map(Number);
   }
 }
+
+export default AgentAudit;
