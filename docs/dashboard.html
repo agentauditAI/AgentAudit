@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentAudit — Compliance Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #080c0f;
+    --bg2: #0d1317;
+    --bg3: #111820;
+    --border: #1a2830;
+    --border2: #1f3040;
+    --green: #00ff88;
+    --green-dim: #00cc6a;
+    --green-faint: rgba(0,255,136,0.07);
+    --green-faint2: rgba(0,255,136,0.12);
+    --cyan: #00d4ff;
+    --yellow: #ffcc00;
+    --red: #ff4444;
+    --text: #c8d8e0;
+    --text-dim: #4a6070;
+    --text-mid: #7a9aaa;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--border);
+    background: rgba(8,12,15,0.95);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    border: 1.5px solid var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    animation: pulse-border 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0,255,136,0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(0,255,136,0); }
+  }
+
+  .logo-icon::before {
+    content: '⬡';
+    color: var(--green);
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .logo-text {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: #fff;
+  }
+
+  .logo-text span { color: var(--green); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .chain-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border2);
+    padding: 4px 10px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text-mid);
+  }
+
+  .chain-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--green);
+    letter-spacing: 0.12em;
+  }
+
+  /* Main */
+  main { padding: 32px 24px 64px; max-width: 1200px; margin: 0 auto; }
+
+  /* Section header */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  /* Stats row */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--bg2);
+    padding: 24px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.2s;
+  }
+
+  .stat-card:hover { background: var(--bg3); }
+
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .stat-card:hover::after { opacity: 1; }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--green);
+    line-height: 1;
+    margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  /* Agent lookup */
+  .lookup-section {
+    margin-bottom: 32px;
+  }
+
+  .lookup-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 24px;
+  }
+
+  .lookup-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .input-wrap {
+    flex: 1;
+    position: relative;
+  }
+
+  .input-prefix {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 12px 12px 12px 80px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input[type="text"]:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 1px rgba(0,255,136,0.1);
+  }
+
+  input[type="text"]::placeholder { color: var(--text-dim); }
+
+  .btn {
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    padding: 12px 24px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn:hover {
+    background: var(--green-faint2);
+    box-shadow: 0 0 16px rgba(0,255,136,0.15);
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-small {
+    font-size: 10px;
+    padding: 8px 16px;
+  }
+
+  /* Agent info panel */
+  .agent-panel {
+    display: none;
+  }
+
+  .agent-panel.visible { display: block; }
+
+  .agent-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+
+  .agent-id {
+    font-size: 11px;
+    color: var(--text-mid);
+  }
+
+  .agent-id strong {
+    color: var(--cyan);
+    font-weight: 500;
+  }
+
+  .status-pill {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    padding: 4px 10px;
+    border: 1px solid;
+    text-transform: uppercase;
+  }
+
+  .status-pill.active {
+    color: var(--green);
+    border-color: var(--green);
+    background: rgba(0,255,136,0.05);
+  }
+
+  .status-pill.inactive {
+    color: var(--red);
+    border-color: var(--red);
+    background: rgba(255,68,68,0.05);
+  }
+
+  .agent-meta {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .meta-item { }
+
+  .meta-key {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .meta-val {
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  /* Score gauge */
+  .score-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+
+  .score-label-col { flex: 1; }
+
+  .score-title {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .score-num {
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .score-bar-col { flex: 2; }
+
+  .score-track {
+    height: 4px;
+    background: var(--border2);
+    position: relative;
+    overflow: visible;
+  }
+
+  .score-fill {
+    height: 100%;
+    background: var(--green);
+    transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 8px var(--green);
+  }
+
+  /* Batches table */
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .table-title {
+    font-size: 11px;
+    color: var(--text-mid);
+    letter-spacing: 0.1em;
+  }
+
+  .batches-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .batches-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+  }
+
+  .batches-table td {
+    padding: 12px 12px;
+    border-bottom: 1px solid rgba(26,40,48,0.5);
+    color: var(--text-mid);
+    vertical-align: middle;
+  }
+
+  .batches-table tr:hover td {
+    background: var(--green-faint);
+    color: var(--text);
+  }
+
+  .risk-badge {
+    font-size: 9px;
+    padding: 2px 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid;
+  }
+
+  .risk-low { color: var(--green); border-color: rgba(0,255,136,0.3); background: rgba(0,255,136,0.05); }
+  .risk-medium { color: var(--yellow); border-color: rgba(255,204,0,0.3); background: rgba(255,204,0,0.05); }
+  .risk-high { color: var(--red); border-color: rgba(255,68,68,0.3); background: rgba(255,68,68,0.05); }
+
+  .action-type {
+    color: var(--cyan);
+    font-size: 11px;
+  }
+
+  /* Empty / loading states */
+  .state-box {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+
+  .state-box .icon {
+    font-size: 24px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+  }
+
+  .loading-dots::after {
+    content: '';
+    animation: dots 1.5s steps(4, end) infinite;
+  }
+
+  @keyframes dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+    100% { content: ''; }
+  }
+
+  /* Contract info bar */
+  .contract-bar {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    font-size: 10px;
+  }
+
+  .contract-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    color: var(--text-dim);
+  }
+
+  .contract-addr {
+    color: var(--cyan);
+    font-size: 10px;
+  }
+
+  .contract-bar-right a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--border2);
+    padding-bottom: 1px;
+    transition: color 0.2s;
+  }
+
+  .contract-bar-right a:hover { color: var(--green); }
+
+  /* Error */
+  .error-msg {
+    color: var(--red);
+    font-size: 11px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255,68,68,0.2);
+    background: rgba(255,68,68,0.04);
+    margin-top: 12px;
+    display: none;
+  }
+
+  .error-msg.visible { display: block; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .agent-meta { grid-template-columns: repeat(2, 1fr); }
+    .lookup-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon"></div>
+      <span class="logo-text">Agent<span>Audit</span></span>
+    </div>
+    <div class="header-right">
+      <div class="chain-badge">
+        <div class="chain-dot"></div>
+        MANTLE MAINNET
+      </div>
+      <div class="live-badge">
+        <div class="chain-dot"></div>
+        LIVE
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Contract info -->
+  <div class="contract-bar">
+    <div class="contract-bar-left">
+      <span>AuditVault v1</span>
+      <span class="contract-addr">0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b</span>
+    </div>
+    <div class="contract-bar-right">
+      <a href="https://explorer.mantle.xyz/address/0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b" target="_blank">↗ Explorer</a>
+    </div>
+  </div>
+
+  <!-- Global stats -->
+  <div class="section-label">Global Stats</div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Batches</div>
+      <div class="stat-value" id="stat-batches">—</div>
+      <div class="stat-sub">on-chain</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Block Number</div>
+      <div class="stat-value" id="stat-block">—</div>
+      <div class="stat-sub">Mantle Mainnet</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Contract Status</div>
+      <div class="stat-value" id="stat-status" style="font-size:14px;padding-top:6px;">—</div>
+      <div class="stat-sub" id="stat-status-sub">checking...</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Network</div>
+      <div class="stat-value" style="font-size:14px;padding-top:6px;color:var(--cyan)">MANTLE</div>
+      <div class="stat-sub">Chain ID 5000</div>
+    </div>
+  </div>
+
+  <!-- Agent lookup -->
+  <div class="lookup-section">
+    <div class="section-label">Agent Lookup</div>
+    <div class="lookup-box">
+      <div class="lookup-row">
+        <div class="input-wrap">
+          <span class="input-prefix">AGENT ID ›</span>
+          <input type="text" id="agent-input" placeholder="0x... agent address" spellcheck="false" />
+        </div>
+        <button class="btn" id="lookup-btn" onclick="lookupAgent()">QUERY</button>
+      </div>
+
+      <div class="error-msg" id="error-msg"></div>
+
+      <!-- Agent panel -->
+      <div class="agent-panel" id="agent-panel">
+
+        <div class="agent-header">
+          <div class="agent-id">Agent: <strong id="agent-addr-display">—</strong></div>
+          <div class="status-pill active" id="agent-status-pill">REGISTERED</div>
+        </div>
+
+        <div class="agent-meta">
+          <div class="meta-item">
+            <div class="meta-key">Agent Type</div>
+            <div class="meta-val" id="meta-type">—</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-key">Framework</div>
+            <div class="meta-val" id="meta-framework">—</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-key">Event Count</div>
+            <div class="meta-val" id="meta-events">—</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-key">Total Batches</div>
+            <div class="meta-val" id="meta-batches">—</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-key">Owner</div>
+            <div class="meta-val" id="meta-owner" style="font-size:10px;word-break:break-all;">—</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-key">Registered At</div>
+            <div class="meta-val" id="meta-regtime">—</div>
+          </div>
+        </div>
+
+        <!-- Compliance score -->
+        <div class="score-row">
+          <div class="score-label-col">
+            <div class="score-title">Compliance Score</div>
+            <div class="score-num" id="compliance-score">—</div>
+          </div>
+          <div class="score-bar-col">
+            <div class="score-track">
+              <div class="score-fill" id="score-fill" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Batches -->
+        <div class="table-header">
+          <div class="table-title">AUDIT BATCHES</div>
+          <div id="batch-count-label" style="font-size:10px;color:var(--text-dim);"></div>
+        </div>
+
+        <div id="batches-container">
+          <div class="state-box">
+            <div class="icon">◎</div>
+            <div>No batches found for this agent</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Initial state -->
+      <div id="initial-state" class="state-box">
+        <div class="icon">⬡</div>
+        <div>Enter an agent address to query on-chain audit data</div>
+      </div>
+
+      <!-- Loading state -->
+      <div id="loading-state" class="state-box" style="display:none;">
+        <div class="icon">◌</div>
+        <div class="loading-dots">Querying Mantle Mainnet</div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<script>
+const CONTRACT_ADDRESS = "0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b";
+const RPC_URL = "https://rpc.mantle.xyz";
+
+const ABI = [
+  "function totalBatches() view returns (uint256)",
+  "function agentEventCount(address) view returns (uint256)",
+  "function isRegistered(address agentId) view returns (bool)",
+  "function getAgentInfo(address agentId) view returns (tuple(bool registered, string agentType, string framework, address owner, uint256 registeredAt))",
+  "function getBatchCount(address agentId) view returns (uint256)",
+  "function getAllBatches(address agentId) view returns (tuple(string[] actions, uint256[] values, bytes32 complianceHash, uint256 timestamp, uint8 complianceScore, string framework)[])",
+  "function getLatestComplianceScore(address agentId) view returns (uint256)"
+];
+
+let provider, contract;
+
+async function init() {
+  try {
+    provider = new ethers.JsonRpcProvider(RPC_URL);
+    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+
+    // Block number
+    const block = await provider.getBlockNumber();
+    document.getElementById('stat-block').textContent = block.toLocaleString();
+
+    // Total batches
+    try {
+      const tb = await contract.totalBatches();
+      document.getElementById('stat-batches').textContent = tb.toString();
+    } catch(e) {
+      document.getElementById('stat-batches').textContent = '0';
+    }
+
+    // Contract status
+    document.getElementById('stat-status').textContent = '✓ LIVE';
+    document.getElementById('stat-status').style.color = 'var(--green)';
+    document.getElementById('stat-status-sub').textContent = 'connected';
+
+  } catch(e) {
+    document.getElementById('stat-status').textContent = '✗ ERR';
+    document.getElementById('stat-status').style.color = 'var(--red)';
+    document.getElementById('stat-status-sub').textContent = 'rpc error';
+    console.error(e);
+  }
+}
+
+function getRiskLabel(score) {
+  if (score >= 80) return ['LOW', 'risk-low'];
+  if (score >= 50) return ['MEDIUM', 'risk-medium'];
+  return ['HIGH', 'risk-high'];
+}
+
+function getScoreColor(score) {
+  if (score >= 80) return 'var(--green)';
+  if (score >= 50) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+function formatTimestamp(ts) {
+  if (!ts || ts === 0n) return '—';
+  const d = new Date(Number(ts) * 1000);
+  return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
+function shortAddr(addr) {
+  if (!addr || addr === '0x0000000000000000000000000000000000000000') return '—';
+  return addr.slice(0, 8) + '...' + addr.slice(-6);
+}
+
+async function lookupAgent() {
+  const input = document.getElementById('agent-input').value.trim();
+  const errorEl = document.getElementById('error-msg');
+  const agentPanel = document.getElementById('agent-panel');
+  const initialState = document.getElementById('initial-state');
+  const loadingState = document.getElementById('loading-state');
+  const btn = document.getElementById('lookup-btn');
+
+  errorEl.classList.remove('visible');
+  agentPanel.classList.remove('visible');
+
+  if (!input || !input.startsWith('0x') || input.length !== 42) {
+    errorEl.textContent = 'Invalid address format. Must be a valid 0x Ethereum address.';
+    errorEl.classList.add('visible');
+    return;
+  }
+
+  initialState.style.display = 'none';
+  loadingState.style.display = 'block';
+  btn.disabled = true;
+
+  try {
+    const agentAddr = input;
+
+    // Check registered
+    const registered = await contract.isRegistered(agentAddr);
+
+    if (!registered) {
+      loadingState.style.display = 'none';
+      errorEl.textContent = 'Agent not registered in AuditVault. No audit data found for this address.';
+      errorEl.classList.add('visible');
+      initialState.style.display = 'block';
+      btn.disabled = false;
+      return;
+    }
+
+    // Get agent info
+    const info = await contract.getAgentInfo(agentAddr);
+    const eventCount = await contract.agentEventCount(agentAddr);
+    const batchCount = await contract.getBatchCount(agentAddr);
+    let complianceScore = 0;
+    let batches = [];
+
+    try {
+      complianceScore = await contract.getLatestComplianceScore(agentAddr);
+    } catch(e) {}
+
+    try {
+      batches = await contract.getAllBatches(agentAddr);
+    } catch(e) {}
+
+    // Populate header
+    document.getElementById('agent-addr-display').textContent = agentAddr.slice(0,10) + '...' + agentAddr.slice(-8);
+    document.getElementById('agent-status-pill').textContent = 'REGISTERED';
+    document.getElementById('agent-status-pill').className = 'status-pill active';
+
+    // Meta
+    document.getElementById('meta-type').textContent = info.agentType || '—';
+    document.getElementById('meta-framework').textContent = info.framework || '—';
+    document.getElementById('meta-events').textContent = eventCount.toString();
+    document.getElementById('meta-batches').textContent = batchCount.toString();
+    document.getElementById('meta-owner').textContent = info.owner || '—';
+    document.getElementById('meta-regtime').textContent = formatTimestamp(info.registeredAt);
+
+    // Score
+    const scoreNum = Number(complianceScore);
+    document.getElementById('compliance-score').textContent = scoreNum + '/100';
+    document.getElementById('compliance-score').style.color = getScoreColor(scoreNum);
+    setTimeout(() => {
+      document.getElementById('score-fill').style.width = scoreNum + '%';
+      document.getElementById('score-fill').style.background = getScoreColor(scoreNum);
+    }, 100);
+
+    // Batches table
+    const batchLabel = document.getElementById('batch-count-label');
+    batchLabel.textContent = batches.length + ' batch' + (batches.length !== 1 ? 'es' : '') + ' found';
+
+    const container = document.getElementById('batches-container');
+
+    if (!batches || batches.length === 0) {
+      container.innerHTML = `
+        <div class="state-box">
+          <div class="icon">◎</div>
+          <div>No batches logged yet for this agent</div>
+        </div>`;
+    } else {
+      let rows = '';
+      const reversedBatches = [...batches].reverse();
+      reversedBatches.forEach((batch, i) => {
+        const realIndex = batches.length - 1 - i;
+        const score = Number(batch.complianceScore);
+        const [riskLabel, riskClass] = getRiskLabel(score);
+        const ts = formatTimestamp(batch.timestamp);
+        const actions = batch.actions && batch.actions.length > 0
+          ? batch.actions.slice(0, 3).join(', ') + (batch.actions.length > 3 ? ' +' + (batch.actions.length - 3) : '')
+          : '—';
+        const hash = batch.complianceHash
+          ? batch.complianceHash.slice(0, 10) + '...'
+          : '—';
+
+        rows += `
+          <tr>
+            <td style="color:var(--text-dim)">#${realIndex}</td>
+            <td>${ts}</td>
+            <td class="action-type">${actions}</td>
+            <td><span class="risk-badge ${riskClass}">${riskLabel}</span></td>
+            <td style="color:${getScoreColor(score)}">${score}</td>
+            <td style="font-size:10px;color:var(--text-dim)">${hash}</td>
+          </tr>`;
+      });
+
+      container.innerHTML = `
+        <table class="batches-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Timestamp</th>
+              <th>Actions</th>
+              <th>Risk</th>
+              <th>Score</th>
+              <th>Hash</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    loadingState.style.display = 'none';
+    agentPanel.classList.add('visible');
+
+  } catch(e) {
+    loadingState.style.display = 'none';
+    initialState.style.display = 'block';
+    errorEl.textContent = 'Error querying contract: ' + (e.message || e.toString()).slice(0, 120);
+    errorEl.classList.add('visible');
+    console.error(e);
+  }
+
+  btn.disabled = false;
+}
+
+// Enter key
+document.getElementById('agent-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') lookupAgent();
+});
+
+init();
+</script>
+</body>
+</html>
+
