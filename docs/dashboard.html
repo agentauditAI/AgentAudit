@@ -552,6 +552,143 @@
     .agent-meta { grid-template-columns: repeat(2, 1fr); }
     .lookup-row { flex-direction: column; }
   }
+
+  /* ── Live sections shared ── */
+  .section-wrap { margin-bottom: 32px; }
+
+  /* ── Compliance Status card ── */
+  .compliance-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .compliance-inner {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .compliance-main {
+    padding: 32px 36px;
+    border-right: 1px solid var(--border);
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .compliance-source {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .compliance-status-big {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    color: var(--text-dim);
+    transition: color 0.4s;
+  }
+  .compliance-status-big.compliant     { color: var(--green); }
+  .compliance-status-big.needs-review  { color: var(--yellow); }
+  .compliance-status-big.non-compliant { color: var(--red); }
+
+  .compliance-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    flex: 1;
+  }
+
+  .compliance-metric {
+    background: var(--bg2);
+    padding: 20px;
+    transition: background 0.2s;
+  }
+  .compliance-metric:hover { background: var(--bg3); }
+
+  .compliance-metric-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .compliance-metric-val {
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--green);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .refresh-strip {
+    padding: 7px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .refresh-strip span { color: var(--text-dim); }
+  .refresh-strip .hi  { color: var(--green); }
+
+  /* ── Live table ── */
+  .live-table {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .live-table-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .live-table-title {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .live-table .batches-table { border: none; }
+
+  /* ── Level badge (ERC-8004 ComplianceLevel) ── */
+  .level-badge {
+    font-size: 9px;
+    padding: 2px 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .level-minimal  { color: var(--text-dim);  border-color: var(--border2);             background: transparent; }
+  .level-limited  { color: var(--cyan);      border-color: rgba(0,212,255,0.3);        background: rgba(0,212,255,0.05); }
+  .level-high-req { color: var(--yellow);    border-color: rgba(255,204,0,0.3);        background: rgba(255,204,0,0.05); }
+  .level-critical { color: var(--red);       border-color: rgba(255,68,68,0.3);        background: rgba(255,68,68,0.05); }
+
+  /* ── Status badge ── */
+  .status-badge { font-size: 9px; padding: 2px 8px; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid; }
+  .status-active  { color: var(--green); border-color: rgba(0,255,136,0.3);  background: rgba(0,255,136,0.05); }
+  .status-revoked { color: var(--red);   border-color: rgba(255,68,68,0.3);  background: rgba(255,68,68,0.05); }
+
+  @media (max-width: 900px) {
+    .compliance-inner          { flex-direction: column; }
+    .compliance-main           { border-right: none; border-bottom: 1px solid var(--border); }
+    .compliance-metrics-grid   { grid-template-columns: repeat(2, 1fr); }
+  }
 </style>
 </head>
 <body>
@@ -610,6 +747,75 @@
       <div class="stat-label">Network</div>
       <div class="stat-value" style="font-size:14px;padding-top:6px;color:var(--cyan)">MANTLE</div>
       <div class="stat-sub">Chain ID 5000</div>
+    </div>
+  </div>
+
+  <!-- COMPLIANCE STATUS -->
+  <div class="section-wrap">
+    <div class="section-label">Compliance Status</div>
+    <div class="compliance-card">
+      <div class="compliance-inner">
+        <div class="compliance-main">
+          <div class="compliance-source">EU AI Act · EUAIActReporter</div>
+          <div class="compliance-status-big" id="comp-status-text">—</div>
+        </div>
+        <div class="compliance-metrics-grid">
+          <div class="compliance-metric">
+            <div class="compliance-metric-label">Agents</div>
+            <div class="compliance-metric-val" id="comp-agents">—</div>
+          </div>
+          <div class="compliance-metric">
+            <div class="compliance-metric-label">High Risk</div>
+            <div class="compliance-metric-val" id="comp-high-risk">—</div>
+          </div>
+          <div class="compliance-metric">
+            <div class="compliance-metric-label">Avg Score</div>
+            <div class="compliance-metric-val" id="comp-avg-score">—</div>
+          </div>
+          <div class="compliance-metric">
+            <div class="compliance-metric-label">Total Batches</div>
+            <div class="compliance-metric-val" id="comp-total-batches">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="refresh-strip">
+        <span>Refreshed: <span class="hi" id="comp-refreshed">—</span></span>
+        <span>Next in: <span class="hi" id="comp-countdown">30s</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RISK SCORES -->
+  <div class="section-wrap">
+    <div class="section-label">Risk Scores</div>
+    <div class="live-table">
+      <div class="live-table-header">
+        <span class="live-table-title">AuditVault · Per-Agent Risk</span>
+        <span style="font-size:9px;color:var(--text-dim)" id="risk-refreshed">—</span>
+      </div>
+      <div id="risk-scores-container">
+        <div class="state-box">
+          <div class="icon">◎</div>
+          <div>Configure VAULT_V2_ADDRESS to load live risk data</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENT IDENTITY -->
+  <div class="section-wrap">
+    <div class="section-label">Agent Identity</div>
+    <div class="live-table">
+      <div class="live-table-header">
+        <span class="live-table-title">AgentIdentityRegistry · ERC-8004</span>
+        <span style="font-size:9px;color:var(--text-dim)" id="identity-refreshed">—</span>
+      </div>
+      <div id="agent-identity-container">
+        <div class="state-box">
+          <div class="icon">◎</div>
+          <div>Configure REGISTRY_ADDRESS to load live identity data</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -922,7 +1128,188 @@ document.getElementById('agent-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') lookupAgent();
 });
 
-init();
+// ── V2 live sections ──────────────────────────────────────────────────────
+// Set these after deploying AgentIdentityRegistry and AuditVault v2.
+const REGISTRY_ADDRESS = "";
+const VAULT_V2_ADDRESS = "";
+
+const REGISTRY_ABI = [
+  "function getRegisteredAgents() view returns (address[])",
+  "function getAgentIdentity(address) view returns (tuple(string name, string version, address developer, bytes32 capabilitiesHash, uint8 complianceLevel, uint256 registrationId, uint256 registeredAt, uint256 updatedAt, bool active))",
+  "function identityCount() view returns (uint256)"
+];
+
+const VAULT_V2_ABI = [
+  "function getAllBatches(address) view returns (tuple(bytes32 merkleRoot, string contentURI, uint256 timestamp, uint256 blockNumber, uint256 eventCount, address submitter, uint8 complianceScore, bool hasParent, address parentAgentId, uint256 parentBatchIndex, uint8 riskLevel)[])",
+  "function getLatestComplianceScore(address) view returns (uint8)",
+  "function getBatchCount(address) view returns (uint256)"
+];
+
+let registryContract = null, vaultV2Contract = null;
+let countdownTimer = null, countdownValue = 30;
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function updateRefreshTimestamp(elId) {
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  const el = document.getElementById(elId);
+  if (el) el.textContent = now;
+}
+
+function startCountdown() {
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownValue = 30;
+  const el = document.getElementById('comp-countdown');
+  if (el) el.textContent = '30s';
+  countdownTimer = setInterval(() => {
+    countdownValue--;
+    if (el) el.textContent = Math.max(0, countdownValue) + 's';
+    if (countdownValue <= 0) { refreshLiveSections(); countdownValue = 30; }
+  }, 1000);
+}
+
+// Client-side replica of EUAIActReporter._computeStatus
+function computeComplianceStatus(agentsCount, highRiskCount, avgScore, totalBatches) {
+  if (agentsCount === 0 || totalBatches === 0) return 'NEEDS_REVIEW';
+  if (avgScore < 50 || highRiskCount * 2 > agentsCount) return 'NON_COMPLIANT';
+  if (highRiskCount === 0 && avgScore >= 80) return 'COMPLIANT';
+  return 'NEEDS_REVIEW';
+}
+
+async function refreshComplianceStatus() {
+  const statusEl = document.getElementById('comp-status-text');
+  if (!vaultV2Contract || !registryContract) {
+    statusEl.className = 'compliance-status-big';
+    statusEl.textContent = 'NOT CONFIGURED';
+    return;
+  }
+  try {
+    const agents = await registryContract.getRegisteredAgents();
+    const agentsCount = agents.length;
+    let totalBatches = 0, highRiskCount = 0, totalScore = 0;
+
+    for (const agent of agents) {
+      let batches = [];
+      try { batches = await vaultV2Contract.getAllBatches(agent); } catch(e) {}
+      totalBatches += batches.length;
+      if (batches.some(b => Number(b.riskLevel) === 2)) highRiskCount++;
+      let score = 0;
+      try { score = Number(await vaultV2Contract.getLatestComplianceScore(agent)); } catch(e) {}
+      totalScore += score;
+    }
+
+    const avgScore = agentsCount > 0 ? Math.round(totalScore / agentsCount) : 0;
+    const status = computeComplianceStatus(agentsCount, highRiskCount, avgScore, totalBatches);
+    const classMap = { 'COMPLIANT': 'compliant', 'NEEDS_REVIEW': 'needs-review', 'NON_COMPLIANT': 'non-compliant' };
+
+    document.getElementById('comp-agents').textContent = agentsCount;
+    document.getElementById('comp-high-risk').textContent = highRiskCount;
+    document.getElementById('comp-avg-score').textContent = avgScore;
+    document.getElementById('comp-total-batches').textContent = totalBatches;
+    statusEl.className = 'compliance-status-big ' + (classMap[status] || '');
+    statusEl.textContent = status.replace(/_/g, ' ');
+    updateRefreshTimestamp('comp-refreshed');
+  } catch(e) {
+    statusEl.className = 'compliance-status-big';
+    statusEl.textContent = 'ERROR';
+    console.error('refreshComplianceStatus:', e);
+  }
+}
+
+async function refreshRiskScores() {
+  const container = document.getElementById('risk-scores-container');
+  if (!vaultV2Contract || !registryContract) return;
+  try {
+    const agents = await registryContract.getRegisteredAgents();
+    if (agents.length === 0) {
+      container.innerHTML = '<div class="state-box"><div class="icon">◎</div><div>No agents registered</div></div>';
+      return;
+    }
+    let rows = '';
+    for (const agent of agents) {
+      let score = 0, batchCount = 0;
+      try { score = Number(await vaultV2Contract.getLatestComplianceScore(agent)); } catch(e) {}
+      try { batchCount = Number(await vaultV2Contract.getBatchCount(agent)); } catch(e) {}
+      const [riskLabel, riskClass] = getRiskLabel(score);
+      rows += `<tr>
+        <td style="font-size:10px;color:var(--cyan)">${escapeHtml(shortAddr(agent))}</td>
+        <td style="font-size:10px;color:var(--text-dim)">${escapeHtml(agent)}</td>
+        <td style="color:${getScoreColor(score)}">${score}</td>
+        <td><span class="risk-badge ${riskClass}">${riskLabel}</span></td>
+        <td style="color:var(--text-dim)">${batchCount}</td>
+      </tr>`;
+    }
+    container.innerHTML = `<table class="batches-table">
+      <thead><tr><th>Short</th><th>Address</th><th>Score</th><th>Risk</th><th>Batches</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+    updateRefreshTimestamp('risk-refreshed');
+  } catch(e) {
+    container.innerHTML = '<div class="state-box"><div class="icon">⚠</div><div>Error loading risk scores</div></div>';
+    console.error('refreshRiskScores:', e);
+  }
+}
+
+const LEVEL_LABELS  = ['MINIMAL', 'LIMITED', 'HIGH REQ', 'CRITICAL'];
+const LEVEL_CLASSES = ['level-minimal', 'level-limited', 'level-high-req', 'level-critical'];
+
+async function refreshAgentIdentity() {
+  const container = document.getElementById('agent-identity-container');
+  if (!registryContract) return;
+  try {
+    const agents = await registryContract.getRegisteredAgents();
+    if (agents.length === 0) {
+      container.innerHTML = '<div class="state-box"><div class="icon">◎</div><div>No agents registered in AgentIdentityRegistry</div></div>';
+      return;
+    }
+    let rows = '';
+    for (const agent of agents) {
+      try {
+        const id = await registryContract.getAgentIdentity(agent);
+        const lvl = Math.min(Number(id.complianceLevel), 3);
+        const capHash = id.capabilitiesHash ? id.capabilitiesHash.slice(0, 10) + '...' : '—';
+        const statusClass = id.active ? 'status-active' : 'status-revoked';
+        rows += `<tr>
+          <td>${escapeHtml(id.name) || '—'}</td>
+          <td style="color:var(--text-dim)">${escapeHtml(id.version) || '—'}</td>
+          <td style="font-size:10px;color:var(--text-mid)">${escapeHtml(shortAddr(id.developer))}</td>
+          <td style="font-size:10px;color:var(--text-dim)">${capHash}</td>
+          <td><span class="level-badge ${LEVEL_CLASSES[lvl]}">${LEVEL_LABELS[lvl]}</span></td>
+          <td><span class="status-badge ${statusClass}">${id.active ? 'ACTIVE' : 'REVOKED'}</span></td>
+        </tr>`;
+      } catch(e) {}
+    }
+    container.innerHTML = `<table class="batches-table">
+      <thead><tr><th>Name</th><th>Version</th><th>Developer</th><th>Cap. Hash</th><th>Level</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+    updateRefreshTimestamp('identity-refreshed');
+  } catch(e) {
+    container.innerHTML = '<div class="state-box"><div class="icon">⚠</div><div>Error loading agent identities</div></div>';
+    console.error('refreshAgentIdentity:', e);
+  }
+}
+
+async function refreshLiveSections() {
+  await Promise.all([refreshComplianceStatus(), refreshRiskScores(), refreshAgentIdentity()]);
+  startCountdown();
+}
+
+async function initV2() {
+  if (!REGISTRY_ADDRESS || !VAULT_V2_ADDRESS) {
+    document.getElementById('comp-status-text').textContent = 'NOT CONFIGURED';
+    return;
+  }
+  try {
+    registryContract = new ethers.Contract(REGISTRY_ADDRESS, REGISTRY_ABI, provider);
+    vaultV2Contract  = new ethers.Contract(VAULT_V2_ADDRESS, VAULT_V2_ABI, provider);
+    await refreshLiveSections();
+  } catch(e) { console.error('initV2:', e); }
+}
+
+init().then(initV2);
 </script>
 </body>
 </html>
