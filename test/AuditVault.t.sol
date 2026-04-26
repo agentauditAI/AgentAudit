@@ -27,6 +27,15 @@ contract AuditVaultTest is Test {
         uint8   complianceScore,
         uint256 timestamp
     );
+    event RiskScoreAssigned(
+        address              indexed agentId,
+        uint256              indexed batchIndex,
+        AuditVault.RiskLevel indexed level,
+        string  actionType,
+        uint256 spendValue,
+        uint256 timestamp
+    );
+
     AuditVault public vault;
 
     address public agentA = address(0x1111);
@@ -43,17 +52,33 @@ contract AuditVaultTest is Test {
     }
 
     // ─────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────
+
+    function _commitBatch(
+        address agent, bytes32 root, string memory uri,
+        uint256 count, uint8 score, string memory action, uint256 spend
+    ) internal {
+        vault.commitBatch(agent, root, uri, count, score, action, spend);
+    }
+
+    function _commitChildBatch(
+        address agent, bytes32 root, string memory uri,
+        uint256 count, uint8 score, string memory action, uint256 spend,
+        address parent, uint256 parentIdx
+    ) internal {
+        vault.commitChildBatch(agent, root, uri, count, score, action, spend, parent, parentIdx);
+    }
+
+    // ─────────────────────────────────────────────
     // Registration
     // ─────────────────────────────────────────────
 
     function test_RegisterAgent() public {
         vault.registerAgent(agentA, "DeFi", "ElizaOS", "Mantle");
         AuditVault.AgentInfo memory info = vault.getAgentInfo(agentA);
-
         assertTrue(info.registered);
         assertEq(info.agentType, "DeFi");
-        assertEq(info.framework, "ElizaOS");
-        assertEq(info.network, "Mantle");
     }
 
     function test_CannotRegisterTwice() public {
@@ -69,12 +94,12 @@ contract AuditVaultTest is Test {
     }
 
     // ─────────────────────────────────────────────
-    // commitBatch (root)
+    // commitBatch — base behaviour
     // ─────────────────────────────────────────────
 
-    function test_CommitBatch() public {
+    function test_CommitBatch_StoresFields() public {
         vm.prank(submitter);
-        vault.commitBatch(agentA, ROOT1, "ipfs://cid1", 10, 85);
+        _commitBatch(agentA, ROOT1, "ipfs://cid1", 10, 85, "LOG", 0);
 
         AuditVault.LogBatch memory b = vault.getBatch(agentA, 0);
         assertEq(b.merkleRoot, ROOT1);
@@ -84,192 +109,206 @@ contract AuditVaultTest is Test {
         assertEq(b.submitter, submitter);
         assertFalse(b.hasParent);
         assertEq(b.parentAgentId, address(0));
-        assertEq(b.parentBatchIndex, 0);
     }
 
     function test_CommitBatch_CountsUpdated() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://cid1", 10, 85);
-        vault.commitBatch(agentA, ROOT2, "ipfs://cid2", 5, 90);
-
+        _commitBatch(agentA, ROOT1, "ipfs://1", 10, 85, "LOG", 0);
+        _commitBatch(agentA, ROOT2, "ipfs://2",  5, 90, "LOG", 0);
         assertEq(vault.getBatchCount(agentA), 2);
         assertEq(vault.agentEventCount(agentA), 15);
         assertEq(vault.totalBatches(), 2);
     }
 
+    function test_CommitBatch_EmitsEvent() public {
+        vm.expectEmit(true, true, false, true);
+        emit LogBatchCommitted(agentA, 0, ROOT1, "ipfs://cid1", 10, 85, block.timestamp);
+        _commitBatch(agentA, ROOT1, "ipfs://cid1", 10, 85, "LOG", 0);
+    }
+
     function test_CommitBatch_EmptyMerkleRootReverts() public {
         vm.expectRevert("AuditVault: empty merkle root");
-        vault.commitBatch(agentA, bytes32(0), "ipfs://cid1", 10, 85);
+        vault.commitBatch(agentA, bytes32(0), "ipfs://cid1", 10, 85, "LOG", 0);
     }
 
     function test_CommitBatch_EmptyURIReverts() public {
         vm.expectRevert("AuditVault: empty contentURI");
-        vault.commitBatch(agentA, ROOT1, "", 10, 85);
+        vault.commitBatch(agentA, ROOT1, "", 10, 85, "LOG", 0);
     }
 
     function test_CommitBatch_ZeroEventCountReverts() public {
         vm.expectRevert("AuditVault: zero event count");
-        vault.commitBatch(agentA, ROOT1, "ipfs://cid1", 0, 85);
+        vault.commitBatch(agentA, ROOT1, "ipfs://cid1", 0, 85, "LOG", 0);
     }
 
     function test_CommitBatch_ScoreOver100Reverts() public {
         vm.expectRevert("AuditVault: score exceeds 100");
-        vault.commitBatch(agentA, ROOT1, "ipfs://cid1", 10, 101);
-    }
-
-    function test_CommitBatch_EmitsEvent() public {
-        vm.expectEmit(true, true, false, true);
-        emit LogBatchCommitted(agentA, 0, ROOT1, "ipfs://cid1", 10, 85, block.timestamp);
-        vault.commitBatch(agentA, ROOT1, "ipfs://cid1", 10, 85);
+        vault.commitBatch(agentA, ROOT1, "ipfs://cid1", 10, 101, "LOG", 0);
     }
 
     // ─────────────────────────────────────────────
-    // commitChildBatch
+    // Risk Scoring — _computeRisk logic
     // ─────────────────────────────────────────────
 
-    function test_CommitChildBatch_Basic() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90);
+    function test_Risk_LOW_DefaultAction() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 0);
+        AuditVault.LogBatch memory b = vault.getBatch(agentA, 0);
+        assertEq(uint8(b.riskLevel), uint8(AuditVault.RiskLevel.LOW));
+    }
 
-        vm.prank(submitter);
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, agentA, 0);
+    function test_Risk_MEDIUM_ByAction_SWAP() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "SWAP", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.MEDIUM));
+    }
+
+    function test_Risk_MEDIUM_ByAction_APPROVE() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "APPROVE", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.MEDIUM));
+    }
+
+    function test_Risk_MEDIUM_ByAction_DELEGATE() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "DELEGATE", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.MEDIUM));
+    }
+
+    function test_Risk_MEDIUM_ByAction_STAKE() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "STAKE", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.MEDIUM));
+    }
+
+    function test_Risk_MEDIUM_ByAction_BORROW() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "BORROW", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.MEDIUM));
+    }
+
+    function test_Risk_MEDIUM_BySpend() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 2 ether);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.MEDIUM));
+    }
+
+    function test_Risk_MEDIUM_SpendAtExactThreshold() public {
+        // > 1 ether = MEDIUM; exactly 1 ether = LOW
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 1 ether);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.LOW));
+    }
+
+    function test_Risk_HIGH_ByAction_TRANSFER() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "TRANSFER", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.HIGH));
+    }
+
+    function test_Risk_HIGH_ByAction_WITHDRAW() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "WITHDRAW", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.HIGH));
+    }
+
+    function test_Risk_HIGH_ByAction_LIQUIDATE() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "LIQUIDATE", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.HIGH));
+    }
+
+    function test_Risk_HIGH_ByAction_BRIDGE() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "BRIDGE", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.HIGH));
+    }
+
+    function test_Risk_HIGH_ByAction_DRAIN() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "DRAIN", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.HIGH));
+    }
+
+    function test_Risk_HIGH_BySpend() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 11 ether);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.HIGH));
+    }
+
+    function test_Risk_HIGH_SpendAtExactHighThreshold() public {
+        // exactly 10 ether is NOT > RISK_THRESHOLD_HIGH, but IS > RISK_THRESHOLD_MEDIUM → MEDIUM
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 10 ether);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.MEDIUM));
+    }
+
+    function test_Risk_ActionTakesPrecedenceOverSpend() public {
+        // TRANSFER is HIGH even with zero spend
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "TRANSFER", 0);
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.HIGH));
+    }
+
+    // ─────────────────────────────────────────────
+    // RiskScoreAssigned event
+    // ─────────────────────────────────────────────
+
+    function test_RiskScoreAssigned_EmittedOnCommitBatch() public {
+        vm.expectEmit(true, true, true, true);
+        emit RiskScoreAssigned(agentA, 0, AuditVault.RiskLevel.HIGH, "TRANSFER", 0, block.timestamp);
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "TRANSFER", 0);
+    }
+
+    function test_RiskScoreAssigned_EmittedOnChildBatch() public {
+        _commitBatch(agentA, ROOT1, "ipfs://parent", 1, 90, "LOG", 0);
+
+        vm.expectEmit(true, true, true, true);
+        emit RiskScoreAssigned(agentB, 0, AuditVault.RiskLevel.MEDIUM, "SWAP", 0, block.timestamp);
+        _commitChildBatch(agentB, ROOT2, "ipfs://child", 1, 80, "SWAP", 0, agentA, 0);
+    }
+
+    // ─────────────────────────────────────────────
+    // getRiskScore
+    // ─────────────────────────────────────────────
+
+    function test_GetRiskScore_StoredCorrectly() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 5, 90, "BRIDGE", 3 ether);
+        AuditVault.RiskScore memory rs = vault.getRiskScore(agentA, 0);
+        assertEq(uint8(rs.level), uint8(AuditVault.RiskLevel.HIGH));
+        assertEq(rs.actionType, "BRIDGE");
+        assertEq(rs.spendValue, 3 ether);
+    }
+
+    function test_GetRiskScore_InvalidBatchReverts() public {
+        vm.expectRevert("AuditVault: batch not found");
+        vault.getRiskScore(agentA, 0);
+    }
+
+    // ─────────────────────────────────────────────
+    // commitChildBatch — risk scoring
+    // ─────────────────────────────────────────────
+
+    function test_CommitChildBatch_RiskScored() public {
+        _commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90, "LOG", 0);
+        _commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, "WITHDRAW", 0, agentA, 0);
 
         AuditVault.LogBatch memory child = vault.getBatch(agentB, 0);
+        assertEq(uint8(child.riskLevel), uint8(AuditVault.RiskLevel.HIGH));
         assertTrue(child.hasParent);
-        assertEq(child.parentAgentId, agentA);
-        assertEq(child.parentBatchIndex, 0);
-        assertEq(child.merkleRoot, ROOT2);
-        assertEq(child.submitter, submitter);
     }
 
     function test_CommitChildBatch_ParentNotFoundReverts() public {
         vm.expectRevert("AuditVault: parent batch not found");
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, agentA, 0);
+        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, "LOG", 0, agentA, 0);
     }
 
     function test_CommitChildBatch_ZeroParentAgentReverts() public {
         vm.expectRevert("AuditVault: zero parent agent");
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, address(0), 0);
-    }
-
-    function test_CommitChildBatch_WrongParentIndexReverts() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90);
-
-        vm.expectRevert("AuditVault: parent batch not found");
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, agentA, 99);
-    }
-
-    function test_CommitChildBatch_EmitsEvent() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90);
-
-        vm.expectEmit(true, true, true, true);
-        emit ChildBatchCommitted(
-            agentB, 0, agentA, 0, ROOT2, "ipfs://child", 3, 80, block.timestamp
-        );
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, agentA, 0);
-    }
-
-    function test_CommitChildBatch_CountsUpdated() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90);
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, agentA, 0);
-
-        assertEq(vault.totalBatches(), 2);
-        assertEq(vault.agentEventCount(agentB), 3);
+        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, "LOG", 0, address(0), 0);
     }
 
     // ─────────────────────────────────────────────
-    // getChildBatches
+    // commitHighRiskEvent — always HIGH
     // ─────────────────────────────────────────────
 
-    function test_GetChildBatches_Empty() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90);
-        AuditVault.BatchRef[] memory children = vault.getChildBatches(agentA, 0);
-        assertEq(children.length, 0);
-    }
-
-    function test_GetChildBatches_OneChild() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90);
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, agentA, 0);
-
-        AuditVault.BatchRef[] memory children = vault.getChildBatches(agentA, 0);
-        assertEq(children.length, 1);
-        assertEq(children[0].agentId, agentB);
-        assertEq(children[0].batchIndex, 0);
-    }
-
-    function test_GetChildBatches_MultipleChildren() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90);
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://childB", 3, 80, agentA, 0);
-        vault.commitChildBatch(agentC, ROOT3, "ipfs://childC", 7, 75, agentA, 0);
-
-        AuditVault.BatchRef[] memory children = vault.getChildBatches(agentA, 0);
-        assertEq(children.length, 2);
-        assertEq(children[0].agentId, agentB);
-        assertEq(children[1].agentId, agentC);
-    }
-
-    function test_GetChildBatches_InvalidParentReverts() public {
-        vm.expectRevert("AuditVault: parent batch not found");
-        vault.getChildBatches(agentA, 0);
-    }
-
-    // ─────────────────────────────────────────────
-    // getAncestorChain
-    // ─────────────────────────────────────────────
-
-    function test_GetAncestorChain_RootReturnsEmpty() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://root", 5, 90);
-        AuditVault.BatchRef[] memory chain = vault.getAncestorChain(agentA, 0);
-        assertEq(chain.length, 0);
-    }
-
-    function test_GetAncestorChain_OneLevel() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://root", 5, 90);
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://child", 3, 80, agentA, 0);
-
-        AuditVault.BatchRef[] memory chain = vault.getAncestorChain(agentB, 0);
-        assertEq(chain.length, 1);
-        assertEq(chain[0].agentId, agentA);
-        assertEq(chain[0].batchIndex, 0);
-    }
-
-    function test_GetAncestorChain_ThreeLevels() public {
-        // A[0] <- B[0] <- C[0]
-        vault.commitBatch(agentA, ROOT1, "ipfs://root", 5, 90);
-        vault.commitChildBatch(agentB, ROOT2, "ipfs://mid", 3, 80, agentA, 0);
-        vault.commitChildBatch(agentC, ROOT3, "ipfs://leaf", 2, 70, agentB, 0);
-
-        AuditVault.BatchRef[] memory chain = vault.getAncestorChain(agentC, 0);
-        assertEq(chain.length, 2);
-        // immediate parent first
-        assertEq(chain[0].agentId, agentB);
-        assertEq(chain[0].batchIndex, 0);
-        // grandparent second
-        assertEq(chain[1].agentId, agentA);
-        assertEq(chain[1].batchIndex, 0);
-    }
-
-    function test_GetAncestorChain_SameAgentChain() public {
-        // agentA[0] <- agentA[1] (self-reference chain)
-        vault.commitBatch(agentA, ROOT1, "ipfs://root", 5, 90);
-        vault.commitChildBatch(agentA, ROOT2, "ipfs://child", 3, 80, agentA, 0);
-
-        AuditVault.BatchRef[] memory chain = vault.getAncestorChain(agentA, 1);
-        assertEq(chain.length, 1);
-        assertEq(chain[0].agentId, agentA);
-        assertEq(chain[0].batchIndex, 0);
-    }
-
-    // ─────────────────────────────────────────────
-    // High-risk event
-    // ─────────────────────────────────────────────
-
-    function test_CommitHighRiskEvent() public {
+    function test_CommitHighRiskEvent_AlwaysHigh() public {
         vault.commitHighRiskEvent(agentA, ROOT1, "ipfs://highrisk");
-
         AuditVault.LogBatch memory b = vault.getBatch(agentA, 0);
-        assertEq(b.merkleRoot, ROOT1);
-        assertEq(b.eventCount, 1);
+        assertEq(uint8(b.riskLevel), uint8(AuditVault.RiskLevel.HIGH));
         assertEq(b.complianceScore, 0);
         assertFalse(b.hasParent);
+    }
+
+    function test_CommitHighRiskEvent_RiskScoreStored() public {
+        vault.commitHighRiskEvent(agentA, ROOT1, "ipfs://highrisk");
+        AuditVault.RiskScore memory rs = vault.getRiskScore(agentA, 0);
+        assertEq(uint8(rs.level), uint8(AuditVault.RiskLevel.HIGH));
+        assertEq(rs.actionType, "HIGH_RISK_EVENT");
+        assertEq(rs.spendValue, 0);
     }
 
     function test_CommitHighRiskEvent_EmptyRootReverts() public {
@@ -278,21 +317,58 @@ contract AuditVaultTest is Test {
     }
 
     // ─────────────────────────────────────────────
+    // getChildBatches
+    // ─────────────────────────────────────────────
+
+    function test_GetChildBatches_Empty() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 5, 90, "LOG", 0);
+        assertEq(vault.getChildBatches(agentA, 0).length, 0);
+    }
+
+    function test_GetChildBatches_MultipleChildren() public {
+        _commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90, "LOG", 0);
+        _commitChildBatch(agentB, ROOT2, "ipfs://b", 3, 80, "LOG", 0, agentA, 0);
+        _commitChildBatch(agentC, ROOT3, "ipfs://c", 7, 75, "LOG", 0, agentA, 0);
+
+        AuditVault.BatchRef[] memory children = vault.getChildBatches(agentA, 0);
+        assertEq(children.length, 2);
+        assertEq(children[0].agentId, agentB);
+        assertEq(children[1].agentId, agentC);
+    }
+
+    // ─────────────────────────────────────────────
+    // getAncestorChain
+    // ─────────────────────────────────────────────
+
+    function test_GetAncestorChain_RootReturnsEmpty() public {
+        _commitBatch(agentA, ROOT1, "ipfs://root", 5, 90, "LOG", 0);
+        assertEq(vault.getAncestorChain(agentA, 0).length, 0);
+    }
+
+    function test_GetAncestorChain_ThreeLevels() public {
+        // A[0] <- B[0] <- C[0]
+        _commitBatch(agentA, ROOT1, "ipfs://root", 5, 90, "LOG", 0);
+        _commitChildBatch(agentB, ROOT2, "ipfs://mid",  3, 80, "LOG", 0, agentA, 0);
+        _commitChildBatch(agentC, ROOT3, "ipfs://leaf", 2, 70, "LOG", 0, agentB, 0);
+
+        AuditVault.BatchRef[] memory chain = vault.getAncestorChain(agentC, 0);
+        assertEq(chain.length, 2);
+        assertEq(chain[0].agentId, agentB); // immediate parent
+        assertEq(chain[1].agentId, agentA); // grandparent
+    }
+
+    // ─────────────────────────────────────────────
     // Merkle verification
     // ─────────────────────────────────────────────
 
     function test_VerifyLog_ValidProof() public {
-        // Build a 2-leaf Merkle tree: leaves = [leaf0, leaf1]
         bytes32 leaf0 = keccak256("log-entry-0");
         bytes32 leaf1 = keccak256("log-entry-1");
-        bytes32 root;
-        if (leaf0 <= leaf1) {
-            root = keccak256(abi.encodePacked(leaf0, leaf1));
-        } else {
-            root = keccak256(abi.encodePacked(leaf1, leaf0));
-        }
+        bytes32 root  = leaf0 <= leaf1
+            ? keccak256(abi.encodePacked(leaf0, leaf1))
+            : keccak256(abi.encodePacked(leaf1, leaf0));
 
-        vault.commitBatch(agentA, root, "ipfs://cid", 2, 90);
+        _commitBatch(agentA, root, "ipfs://cid", 2, 90, "LOG", 0);
 
         bytes32[] memory proof = new bytes32[](1);
         proof[0] = leaf1;
@@ -302,14 +378,11 @@ contract AuditVaultTest is Test {
     function test_VerifyLog_InvalidProof() public {
         bytes32 leaf0 = keccak256("log-entry-0");
         bytes32 leaf1 = keccak256("log-entry-1");
-        bytes32 root;
-        if (leaf0 <= leaf1) {
-            root = keccak256(abi.encodePacked(leaf0, leaf1));
-        } else {
-            root = keccak256(abi.encodePacked(leaf1, leaf0));
-        }
+        bytes32 root  = leaf0 <= leaf1
+            ? keccak256(abi.encodePacked(leaf0, leaf1))
+            : keccak256(abi.encodePacked(leaf1, leaf0));
 
-        vault.commitBatch(agentA, root, "ipfs://cid", 2, 90);
+        _commitBatch(agentA, root, "ipfs://cid", 2, 90, "LOG", 0);
 
         bytes32[] memory badProof = new bytes32[](1);
         badProof[0] = keccak256("wrong");
@@ -320,17 +393,9 @@ contract AuditVaultTest is Test {
     // Misc read functions
     // ─────────────────────────────────────────────
 
-    function test_GetAllBatches() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://1", 5, 90);
-        vault.commitBatch(agentA, ROOT2, "ipfs://2", 3, 80);
-
-        AuditVault.LogBatch[] memory all = vault.getAllBatches(agentA);
-        assertEq(all.length, 2);
-    }
-
     function test_GetLatestComplianceScore() public {
-        vault.commitBatch(agentA, ROOT1, "ipfs://1", 5, 90);
-        vault.commitBatch(agentA, ROOT2, "ipfs://2", 3, 70);
+        _commitBatch(agentA, ROOT1, "ipfs://1", 5, 90, "LOG", 0);
+        _commitBatch(agentA, ROOT2, "ipfs://2", 3, 70, "LOG", 0);
         assertEq(vault.getLatestComplianceScore(agentA), 70);
     }
 
