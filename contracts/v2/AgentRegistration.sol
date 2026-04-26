@@ -72,6 +72,13 @@ contract AgentRegistration {
     }
 
     /**
+     * @notice Return the full Agent struct (public mapping getter can't return structs with strings)
+     */
+    function getAgent(uint256 agentId) external view returns (Agent memory) {
+        return agents[agentId];
+    }
+
+    /**
      * @notice Check if agent is active (registered and not revoked)
      */
     function isActive(uint256 agentId) external view returns (bool) {
