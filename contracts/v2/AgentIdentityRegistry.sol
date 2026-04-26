@@ -45,6 +45,9 @@ contract AgentIdentityRegistry {
     // agentAddress => registered flag
     mapping(address => bool) private _registered;
 
+    // ordered list of all registered agent addresses (for iteration by EUAIActReporter)
+    address[] private _agentList;
+
     uint256 public identityCount;
 
     // ─────────────────────────────────────────────
@@ -152,6 +155,7 @@ contract AgentIdentityRegistry {
         });
 
         _registered[agentId] = true;
+        _agentList.push(agentId);
         identityCount++;
 
         emit AgentIdentityRegistered(
@@ -208,6 +212,11 @@ contract AgentIdentityRegistry {
         returns (AgentIdentity memory)
     {
         return _identities[agentId];
+    }
+
+    /// @notice Returns all registered agent addresses — used by EUAIActReporter for iteration.
+    function getRegisteredAgents() external view returns (address[] memory) {
+        return _agentList;
     }
 
     /// @notice Returns true if an identity has been registered for this address.
