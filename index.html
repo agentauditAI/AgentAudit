@@ -307,6 +307,19 @@
       line-height: 1.6;
     }
 
+    .feature-tag {
+      display: inline-block;
+      margin-top: 0.9rem;
+      font-family: var(--mono);
+      font-size: 0.67rem;
+      color: var(--green);
+      opacity: 0.5;
+      letter-spacing: 0.04em;
+    }
+
+    .feature:hover .feature-tag { opacity: 0.85; }
+    .feature:hover { background: #111a11; }
+
     /* ── EU AI Act table ── */
     .compliance-table {
       width: 100%;
@@ -389,6 +402,7 @@
     <a class="nav-logo" href="#">AgentAudit</a>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
+      <li><a href="#what-it-does">What It Does</a></li>
       <li><a href="#compliance">EU AI Act</a></li>
       <li><a href="#quickstart">SDK</a></li>
       <li><a href="https://github.com/agentauditAI/AgentAudit" target="_blank">GitHub</a></li>
@@ -548,6 +562,73 @@
       });<br />
       <br />
       console.<span class="fn">log</span>(receipt.txHash); <span class="cmt">// on-chain proof ✅</span>
+    </div>
+  </section>
+
+  <!-- WHAT AGENTAUDIT DOES -->
+  <section id="what-it-does">
+    <div class="section-label">// What AgentAudit Does</div>
+    <h2>Six layers of on-chain intelligence.</h2>
+    <p class="section-sub">
+      From MCP plug-in to ZK proofs — every layer production-ready and
+      tested for AI agents that must prove compliance under the EU AI Act.
+    </p>
+    <div class="features">
+
+      <div class="feature">
+        <div class="feature-icon">⚙️</div>
+        <h3>MCP Server</h3>
+        <p>Plug any MCP-compatible agent in minutes. No custom SDK.
+           register_agent, commit_audit_batch, get_risk_score — exposed
+           over stdio transport and ready to use.</p>
+        <code class="feature-tag">mcp-server.ts</code>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">🪪</div>
+        <h3>ERC-8004 Agent Identity</h3>
+        <p>On-chain Know Your Agent: name, version, developer wallet,
+           capabilities hash, and compliance tier. Immutable, queryable,
+           cross-validated against AgentRegistration.</p>
+        <code class="feature-tag">AgentIdentityRegistry.sol</code>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">🧠</div>
+        <h3>Decision Provenance</h3>
+        <p>Log WHY the agent acted — model version, input data hash,
+           active policy, and trigger event. Causal chain anchored
+           on-chain without exposing raw prompts.</p>
+        <code class="feature-tag">commitBatchWithProvenance()</code>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">⚠️</div>
+        <h3>Risk Scoring</h3>
+        <p>Every batch scored HIGH / MEDIUM / LOW automatically.
+           TRANSFER, BRIDGE, DRAIN → HIGH. SWAP, STAKE → MEDIUM.
+           Action type and spend thresholds enforced on-chain.</p>
+        <code class="feature-tag">AuditVault.sol · _computeRisk()</code>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">📊</div>
+        <h3>EU AI Act Auto-Reports</h3>
+        <p>generateComplianceReport() reads all on-chain data and
+           produces a structured COMPLIANT / NEEDS_REVIEW /
+           NON_COMPLIANT verdict with full audit summary. Zero manual work.</p>
+        <code class="feature-tag">EUAIActReporter.sol</code>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">🔏</div>
+        <h3>ZK-Proof Layer</h3>
+        <p>Prove policy compliance without revealing the prompt.
+           Submit a commitment hash on-chain, reveal only when
+           required. Binding, hiding, selective disclosure.</p>
+        <code class="feature-tag">ZKAuditProof.sol</code>
+      </div>
+
     </div>
   </section>
 
