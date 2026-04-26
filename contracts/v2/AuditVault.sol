@@ -52,6 +52,16 @@ contract AuditVault {
         uint256   timestamp;
     }
 
+    /// @notice Explains WHY an agent acted — causal provenance for a batch of decisions.
+    ///         Stored separately so existing callers using commitBatch() are unaffected.
+    struct DecisionProvenance {
+        string  modelVersion;  // AI model that produced the decisions e.g. "claude-3-opus-20240229"
+        bytes32 inputDataHash; // keccak256 of the full input (prompt + context) — privacy-preserving
+        string  activePolicy;  // policy name active at decision time e.g. "eu-ai-act-limited-v2"
+        string  triggerEvent;  // what caused this batch e.g. "USER_REQUEST", "PRICE_ALERT", "CRON"
+        uint256 timestamp;     // block.timestamp when provenance was recorded
+    }
+
     // ─────────────────────────────────────────────
     // Constants
     // ─────────────────────────────────────────────
@@ -78,6 +88,9 @@ contract AuditVault {
     // agentId => batchIndex => full risk score details
     mapping(address => mapping(uint256 => RiskScore)) private _riskScores;
 
+    // agentId => batchIndex => decision provenance (only set via commitBatchWithProvenance)
+    mapping(address => mapping(uint256 => DecisionProvenance)) private _provenances;
+
     // global batch count
     uint256 public totalBatches;
 
@@ -103,7 +116,6 @@ contract AuditVault {
         uint256 timestamp
     );
 
-    /// @notice Emitted when a child batch is committed as part of a multi-agent chain
     event ChildBatchCommitted(
         address indexed agentId,
         uint256 indexed batchIndex,
@@ -123,7 +135,6 @@ contract AuditVault {
         uint256 timestamp
     );
 
-    /// @notice Emitted whenever a risk score is computed and stored for a batch
     event RiskScoreAssigned(
         address   indexed agentId,
         uint256   indexed batchIndex,
@@ -133,11 +144,23 @@ contract AuditVault {
         uint256   timestamp
     );
 
+    /// @notice Emitted when decision provenance is recorded for a batch.
+    ///         inputDataHash is indexed so off-chain systems can find every batch
+    ///         that was triggered by the same input (e.g. detect replay or drift).
+    event DecisionProvenanceLogged(
+        address indexed agentId,
+        uint256 indexed batchIndex,
+        bytes32 indexed inputDataHash,
+        string  modelVersion,
+        string  activePolicy,
+        string  triggerEvent,
+        uint256 timestamp
+    );
+
     // ─────────────────────────────────────────────
     // Agent Registration
     // ─────────────────────────────────────────────
 
-    /// @notice Register an AI agent on-chain
     function registerAgent(
         address agentId,
         string calldata agentType,
@@ -159,17 +182,10 @@ contract AuditVault {
     }
 
     // ─────────────────────────────────────────────
-    // Batch Commit (main write functions)
+    // Batch Commit
     // ─────────────────────────────────────────────
 
-    /// @notice Commit a root batch of agent action logs (no parent)
-    /// @param agentId         Address of the AI agent
-    /// @param merkleRoot      Merkle root of all log hashes in this batch
-    /// @param contentURI      IPFS CID or Arweave txId with full log payload
-    /// @param eventCount      Number of events in this batch
-    /// @param complianceScore EU AI Act compliance score 0-100
-    /// @param actionType      Dominant action type in this batch (e.g. "TRANSFER", "SWAP")
-    /// @param spendValue      Total spend value in wei associated with this batch
+    /// @notice Commit a root batch of agent action logs (no parent, no provenance)
     function commitBatch(
         address agentId,
         bytes32 merkleRoot,
@@ -179,33 +195,52 @@ contract AuditVault {
         string  calldata actionType,
         uint256 spendValue
     ) external {
-        require(merkleRoot != bytes32(0), "AuditVault: empty merkle root");
-        require(bytes(contentURI).length > 0, "AuditVault: empty contentURI");
-        require(eventCount > 0, "AuditVault: zero event count");
-        require(complianceScore <= 100, "AuditVault: score exceeds 100");
+        uint256 batchIndex = _writeBatch(
+            agentId, merkleRoot, contentURI, eventCount, complianceScore,
+            actionType, spendValue, false, address(0), 0
+        );
 
-        RiskLevel risk = _computeRisk(actionType, spendValue);
-        uint256 batchIndex = _agentBatches[agentId].length;
+        emit LogBatchCommitted(
+            agentId, batchIndex, merkleRoot, contentURI, eventCount, complianceScore, block.timestamp
+        );
+    }
 
-        _agentBatches[agentId].push(LogBatch({
-            merkleRoot:       merkleRoot,
-            contentURI:       contentURI,
-            timestamp:        block.timestamp,
-            blockNumber:      block.number,
-            eventCount:       eventCount,
-            submitter:        msg.sender,
-            complianceScore:  complianceScore,
-            hasParent:        false,
-            parentAgentId:    address(0),
-            parentBatchIndex: 0,
-            riskLevel:        risk
-        }));
+    /// @notice Commit a batch AND record decision provenance in a single transaction.
+    /// @dev    Use this when the batch was produced by an AI model so auditors can trace
+    ///         exactly which model version, input data, and policy triggered the actions.
+    /// @param agentId        Address of the AI agent
+    /// @param merkleRoot     Merkle root of all log hashes in this batch
+    /// @param contentURI     IPFS CID or Arweave txId with full log payload
+    /// @param eventCount     Number of events in this batch
+    /// @param complianceScore EU AI Act compliance score 0-100
+    /// @param actionType     Dominant action type (drives risk scoring)
+    /// @param spendValue     Total spend value in wei
+    /// @param modelVersion   AI model identifier e.g. "claude-3-opus-20240229"
+    /// @param inputDataHash  keccak256 of the full input (prompt + context) — hash locally, not the raw data
+    /// @param activePolicy   Policy name active at decision time e.g. "eu-ai-act-limited-v2"
+    /// @param triggerEvent   What caused this batch e.g. "USER_REQUEST", "PRICE_ALERT", "CRON"
+    function commitBatchWithProvenance(
+        address agentId,
+        bytes32 merkleRoot,
+        string  calldata contentURI,
+        uint256 eventCount,
+        uint8   complianceScore,
+        string  calldata actionType,
+        uint256 spendValue,
+        string  calldata modelVersion,
+        bytes32 inputDataHash,
+        string  calldata activePolicy,
+        string  calldata triggerEvent
+    ) external {
+        require(bytes(modelVersion).length > 0,  "AuditVault: empty modelVersion");
+        require(inputDataHash != bytes32(0),      "AuditVault: empty inputDataHash");
 
-        _storeRiskScore(agentId, batchIndex, risk, actionType, spendValue);
+        uint256 batchIndex = _writeBatch(
+            agentId, merkleRoot, contentURI, eventCount, complianceScore,
+            actionType, spendValue, false, address(0), 0
+        );
 
-        agentEventCount[agentId] += eventCount;
-        _agents[agentId].totalEvents += eventCount;
-        totalBatches++;
+        _storeProvenance(agentId, batchIndex, modelVersion, inputDataHash, activePolicy, triggerEvent);
 
         emit LogBatchCommitted(
             agentId, batchIndex, merkleRoot, contentURI, eventCount, complianceScore, block.timestamp
@@ -214,15 +249,6 @@ contract AuditVault {
 
     /// @notice Commit a child batch linked to a parent agent's batch
     /// @dev Cycles are structurally impossible — a parent must exist before a child can reference it.
-    /// @param agentId           Address of the child AI agent
-    /// @param merkleRoot        Merkle root of all log hashes in this batch
-    /// @param contentURI        IPFS CID or Arweave txId with full log payload
-    /// @param eventCount        Number of events in this batch
-    /// @param complianceScore   EU AI Act compliance score 0-100
-    /// @param actionType        Dominant action type in this batch
-    /// @param spendValue        Total spend value in wei associated with this batch
-    /// @param parentAgentId     Address of the parent agent
-    /// @param parentBatchIndex  Index of the parent batch within parentAgentId's batch array
     function commitChildBatch(
         address agentId,
         bytes32 merkleRoot,
@@ -234,43 +260,21 @@ contract AuditVault {
         address parentAgentId,
         uint256 parentBatchIndex
     ) external {
-        require(merkleRoot != bytes32(0), "AuditVault: empty merkle root");
-        require(bytes(contentURI).length > 0, "AuditVault: empty contentURI");
-        require(eventCount > 0, "AuditVault: zero event count");
-        require(complianceScore <= 100, "AuditVault: score exceeds 100");
         require(parentAgentId != address(0), "AuditVault: zero parent agent");
         require(
             parentBatchIndex < _agentBatches[parentAgentId].length,
             "AuditVault: parent batch not found"
         );
 
-        RiskLevel risk = _computeRisk(actionType, spendValue);
-        uint256 batchIndex = _agentBatches[agentId].length;
-
-        _agentBatches[agentId].push(LogBatch({
-            merkleRoot:       merkleRoot,
-            contentURI:       contentURI,
-            timestamp:        block.timestamp,
-            blockNumber:      block.number,
-            eventCount:       eventCount,
-            submitter:        msg.sender,
-            complianceScore:  complianceScore,
-            hasParent:        true,
-            parentAgentId:    parentAgentId,
-            parentBatchIndex: parentBatchIndex,
-            riskLevel:        risk
-        }));
+        uint256 batchIndex = _writeBatch(
+            agentId, merkleRoot, contentURI, eventCount, complianceScore,
+            actionType, spendValue, true, parentAgentId, parentBatchIndex
+        );
 
         _childBatches[parentAgentId][parentBatchIndex].push(BatchRef({
             agentId:    agentId,
             batchIndex: batchIndex
         }));
-
-        _storeRiskScore(agentId, batchIndex, risk, actionType, spendValue);
-
-        agentEventCount[agentId] += eventCount;
-        _agents[agentId].totalEvents += eventCount;
-        totalBatches++;
 
         emit ChildBatchCommitted(
             agentId, batchIndex, parentAgentId, parentBatchIndex,
@@ -278,8 +282,8 @@ contract AuditVault {
         );
     }
 
-    /// @notice Commit a high-risk event immediately (bypasses batch buffer)
-    /// @dev Always assigned RiskLevel.HIGH regardless of action type or spend.
+    /// @notice Commit a high-risk event immediately (bypasses batch buffer).
+    ///         Always assigned RiskLevel.HIGH.
     function commitHighRiskEvent(
         address agentId,
         bytes32 merkleRoot,
@@ -312,11 +316,83 @@ contract AuditVault {
     }
 
     // ─────────────────────────────────────────────
+    // Internal — batch writing
+    // ─────────────────────────────────────────────
+
+    /// @dev Core batch-writing logic shared by commitBatch, commitBatchWithProvenance,
+    ///      and commitChildBatch. Returns the new batchIndex.
+    function _writeBatch(
+        address agentId,
+        bytes32 merkleRoot,
+        string  calldata contentURI,
+        uint256 eventCount,
+        uint8   complianceScore,
+        string  calldata actionType,
+        uint256 spendValue,
+        bool    hasParent_,
+        address parentAgentId_,
+        uint256 parentBatchIndex_
+    ) internal returns (uint256 batchIndex) {
+        require(merkleRoot != bytes32(0), "AuditVault: empty merkle root");
+        require(bytes(contentURI).length > 0, "AuditVault: empty contentURI");
+        require(eventCount > 0, "AuditVault: zero event count");
+        require(complianceScore <= 100, "AuditVault: score exceeds 100");
+
+        RiskLevel risk = _computeRisk(actionType, spendValue);
+        batchIndex = _agentBatches[agentId].length;
+
+        _agentBatches[agentId].push(LogBatch({
+            merkleRoot:       merkleRoot,
+            contentURI:       contentURI,
+            timestamp:        block.timestamp,
+            blockNumber:      block.number,
+            eventCount:       eventCount,
+            submitter:        msg.sender,
+            complianceScore:  complianceScore,
+            hasParent:        hasParent_,
+            parentAgentId:    parentAgentId_,
+            parentBatchIndex: parentBatchIndex_,
+            riskLevel:        risk
+        }));
+
+        _storeRiskScore(agentId, batchIndex, risk, actionType, spendValue);
+
+        agentEventCount[agentId] += eventCount;
+        _agents[agentId].totalEvents += eventCount;
+        totalBatches++;
+    }
+
+    // ─────────────────────────────────────────────
+    // Internal — provenance writing
+    // ─────────────────────────────────────────────
+
+    function _storeProvenance(
+        address agentId,
+        uint256 batchIndex,
+        string  memory modelVersion,
+        bytes32 inputDataHash,
+        string  memory activePolicy,
+        string  memory triggerEvent
+    ) internal {
+        _provenances[agentId][batchIndex] = DecisionProvenance({
+            modelVersion:  modelVersion,
+            inputDataHash: inputDataHash,
+            activePolicy:  activePolicy,
+            triggerEvent:  triggerEvent,
+            timestamp:     block.timestamp
+        });
+
+        emit DecisionProvenanceLogged(
+            agentId, batchIndex, inputDataHash,
+            modelVersion, activePolicy, triggerEvent, block.timestamp
+        );
+    }
+
+    // ─────────────────────────────────────────────
     // Risk Scoring (internal)
     // ─────────────────────────────────────────────
 
-    /// @dev Computes risk level from action type and spend value.
-    ///      Action type match is done via keccak256 to avoid O(n) string comparison.
+    /// @dev Action type match via keccak256 avoids O(n) string comparison.
     ///      Spend thresholds: HIGH > 10 ETH, MEDIUM > 1 ETH.
     function _computeRisk(string calldata actionType, uint256 spendValue)
         internal pure returns (RiskLevel)
@@ -324,23 +400,23 @@ contract AuditVault {
         bytes32 action = keccak256(bytes(actionType));
 
         if (
-            action == keccak256("TRANSFER")      ||
-            action == keccak256("WITHDRAW")      ||
-            action == keccak256("LIQUIDATE")     ||
-            action == keccak256("EMERGENCY_EXIT")||
-            action == keccak256("BRIDGE")        ||
+            action == keccak256("TRANSFER")       ||
+            action == keccak256("WITHDRAW")       ||
+            action == keccak256("LIQUIDATE")      ||
+            action == keccak256("EMERGENCY_EXIT") ||
+            action == keccak256("BRIDGE")         ||
             action == keccak256("DRAIN")
         ) return RiskLevel.HIGH;
 
         if (spendValue > RISK_THRESHOLD_HIGH) return RiskLevel.HIGH;
 
         if (
-            action == keccak256("SWAP")    ||
-            action == keccak256("APPROVE") ||
-            action == keccak256("DELEGATE")||
-            action == keccak256("STAKE")   ||
-            action == keccak256("UNSTAKE") ||
-            action == keccak256("BORROW")  ||
+            action == keccak256("SWAP")     ||
+            action == keccak256("APPROVE")  ||
+            action == keccak256("DELEGATE") ||
+            action == keccak256("STAKE")    ||
+            action == keccak256("UNSTAKE")  ||
+            action == keccak256("BORROW")   ||
             action == keccak256("REPAY")
         ) return RiskLevel.MEDIUM;
 
@@ -350,11 +426,11 @@ contract AuditVault {
     }
 
     function _storeRiskScore(
-        address agentId,
-        uint256 batchIndex,
+        address   agentId,
+        uint256   batchIndex,
         RiskLevel level,
-        string memory actionType,
-        uint256 spendValue
+        string    memory actionType,
+        uint256   spendValue
     ) internal {
         _riskScores[agentId][batchIndex] = RiskScore({
             level:      level,
@@ -370,7 +446,6 @@ contract AuditVault {
     // Merkle Verification
     // ─────────────────────────────────────────────
 
-    /// @notice Verify that a single log belongs to a committed batch
     function verifyLog(
         address agentId,
         uint256 batchIndex,
@@ -402,7 +477,6 @@ contract AuditVault {
     // Multi-Agent Chain Read Functions
     // ─────────────────────────────────────────────
 
-    /// @notice Get all direct children of a given batch
     function getChildBatches(address parentAgentId, uint256 parentBatchIndex)
         external view returns (BatchRef[] memory)
     {
@@ -446,10 +520,31 @@ contract AuditVault {
     }
 
     // ─────────────────────────────────────────────
+    // Decision Provenance Read Functions
+    // ─────────────────────────────────────────────
+
+    /// @notice Get the decision provenance for a specific batch.
+    ///         Returns zero-value struct if the batch was committed without provenance.
+    ///         Callers can check inputDataHash != bytes32(0) to detect presence.
+    function getProvenance(address agentId, uint256 batchIndex)
+        external view returns (DecisionProvenance memory)
+    {
+        require(batchIndex < _agentBatches[agentId].length, "AuditVault: batch not found");
+        return _provenances[agentId][batchIndex];
+    }
+
+    /// @notice Returns true if decision provenance was recorded for this batch.
+    function hasProvenance(address agentId, uint256 batchIndex)
+        external view returns (bool)
+    {
+        require(batchIndex < _agentBatches[agentId].length, "AuditVault: batch not found");
+        return _provenances[agentId][batchIndex].inputDataHash != bytes32(0);
+    }
+
+    // ─────────────────────────────────────────────
     // Risk Score Read Functions
     // ─────────────────────────────────────────────
 
-    /// @notice Get the full risk score details for a specific batch
     function getRiskScore(address agentId, uint256 batchIndex)
         external view returns (RiskScore memory)
     {
@@ -461,7 +556,6 @@ contract AuditVault {
     // Standard Read Functions
     // ─────────────────────────────────────────────
 
-    /// @notice Get a specific batch for an agent
     function getBatch(address agentId, uint256 batchIndex)
         external view returns (LogBatch memory)
     {
@@ -469,26 +563,22 @@ contract AuditVault {
         return _agentBatches[agentId][batchIndex];
     }
 
-    /// @notice Get total number of batches for an agent
     function getBatchCount(address agentId) external view returns (uint256) {
         return _agentBatches[agentId].length;
     }
 
-    /// @notice Get all batches for an agent
     function getAllBatches(address agentId)
         external view returns (LogBatch[] memory)
     {
         return _agentBatches[agentId];
     }
 
-    /// @notice Get agent info
     function getAgentInfo(address agentId)
         external view returns (AgentInfo memory)
     {
         return _agents[agentId];
     }
 
-    /// @notice Get latest compliance score for an agent
     function getLatestComplianceScore(address agentId)
         external view returns (uint8)
     {
@@ -497,7 +587,6 @@ contract AuditVault {
         return _agentBatches[agentId][count - 1].complianceScore;
     }
 
-    /// @notice Check if agent is registered
     function isRegistered(address agentId) external view returns (bool) {
         return _agents[agentId].registered;
     }

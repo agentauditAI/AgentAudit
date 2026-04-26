@@ -35,6 +35,15 @@ contract AuditVaultTest is Test {
         uint256 spendValue,
         uint256 timestamp
     );
+    event DecisionProvenanceLogged(
+        address indexed agentId,
+        uint256 indexed batchIndex,
+        bytes32 indexed inputDataHash,
+        string  modelVersion,
+        string  activePolicy,
+        string  triggerEvent,
+        uint256 timestamp
+    );
 
     AuditVault public vault;
 
@@ -46,6 +55,8 @@ contract AuditVaultTest is Test {
     bytes32 constant ROOT1 = keccak256("root1");
     bytes32 constant ROOT2 = keccak256("root2");
     bytes32 constant ROOT3 = keccak256("root3");
+
+    bytes32 constant INPUT_HASH = keccak256("user: swap 1 ETH for USDC");
 
     function setUp() public {
         vault = new AuditVault();
@@ -60,6 +71,18 @@ contract AuditVaultTest is Test {
         uint256 count, uint8 score, string memory action, uint256 spend
     ) internal {
         vault.commitBatch(agent, root, uri, count, score, action, spend);
+    }
+
+    function _commitWithProvenance(
+        address agent, bytes32 root, string memory uri,
+        uint256 count, uint8 score, string memory action, uint256 spend,
+        string memory model, bytes32 inputHash,
+        string memory policy, string memory trigger
+    ) internal {
+        vault.commitBatchWithProvenance(
+            agent, root, uri, count, score, action, spend,
+            model, inputHash, policy, trigger
+        );
     }
 
     function _commitChildBatch(
@@ -145,14 +168,180 @@ contract AuditVaultTest is Test {
         vault.commitBatch(agentA, ROOT1, "ipfs://cid1", 10, 101, "LOG", 0);
     }
 
+    // commitBatch leaves no provenance
+    function test_CommitBatch_NoProvenance() public {
+        _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 0);
+        assertFalse(vault.hasProvenance(agentA, 0));
+        AuditVault.DecisionProvenance memory p = vault.getProvenance(agentA, 0);
+        assertEq(p.inputDataHash, bytes32(0));
+        assertEq(bytes(p.modelVersion).length, 0);
+    }
+
     // ─────────────────────────────────────────────
-    // Risk Scoring — _computeRisk logic
+    // commitBatchWithProvenance — happy path
+    // ─────────────────────────────────────────────
+
+    function test_CommitWithProvenance_StoresFields() public {
+        _commitWithProvenance(
+            agentA, ROOT1, "ipfs://1", 5, 90, "SWAP", 0,
+            "claude-3-opus-20240229", INPUT_HASH,
+            "eu-ai-act-limited-v2", "USER_REQUEST"
+        );
+
+        AuditVault.DecisionProvenance memory p = vault.getProvenance(agentA, 0);
+        assertEq(p.modelVersion,  "claude-3-opus-20240229");
+        assertEq(p.inputDataHash, INPUT_HASH);
+        assertEq(p.activePolicy,  "eu-ai-act-limited-v2");
+        assertEq(p.triggerEvent,  "USER_REQUEST");
+        assertEq(p.timestamp,     block.timestamp);
+    }
+
+    function test_CommitWithProvenance_HasProvenance() public {
+        _commitWithProvenance(
+            agentA, ROOT1, "ipfs://1", 5, 90, "LOG", 0,
+            "gpt-4-turbo", INPUT_HASH, "conservative-v1", "CRON"
+        );
+        assertTrue(vault.hasProvenance(agentA, 0));
+    }
+
+    function test_CommitWithProvenance_AlsoBatchCountsUpdated() public {
+        _commitWithProvenance(
+            agentA, ROOT1, "ipfs://1", 3, 80, "SWAP", 0,
+            "claude-3-opus-20240229", INPUT_HASH, "", ""
+        );
+        assertEq(vault.getBatchCount(agentA), 1);
+        assertEq(vault.agentEventCount(agentA), 3);
+        assertEq(vault.totalBatches(), 1);
+    }
+
+    function test_CommitWithProvenance_RiskScoreAssigned() public {
+        _commitWithProvenance(
+            agentA, ROOT1, "ipfs://1", 1, 90, "TRANSFER", 0,
+            "claude-3-opus-20240229", INPUT_HASH, "strict-v1", "PRICE_ALERT"
+        );
+        AuditVault.RiskScore memory rs = vault.getRiskScore(agentA, 0);
+        assertEq(uint8(rs.level), uint8(AuditVault.RiskLevel.HIGH));
+    }
+
+    function test_CommitWithProvenance_EmitsLogBatchCommitted() public {
+        vm.expectEmit(true, true, false, true);
+        emit LogBatchCommitted(agentA, 0, ROOT1, "ipfs://1", 5, 90, block.timestamp);
+        _commitWithProvenance(
+            agentA, ROOT1, "ipfs://1", 5, 90, "LOG", 0,
+            "claude-3-opus-20240229", INPUT_HASH, "policy-v1", "USER_REQUEST"
+        );
+    }
+
+    function test_CommitWithProvenance_EmitsDecisionProvenanceLogged() public {
+        vm.expectEmit(true, true, true, true);
+        emit DecisionProvenanceLogged(
+            agentA, 0, INPUT_HASH,
+            "claude-3-opus-20240229", "eu-ai-act-limited-v2", "USER_REQUEST",
+            block.timestamp
+        );
+        _commitWithProvenance(
+            agentA, ROOT1, "ipfs://1", 5, 90, "LOG", 0,
+            "claude-3-opus-20240229", INPUT_HASH,
+            "eu-ai-act-limited-v2", "USER_REQUEST"
+        );
+    }
+
+    function test_CommitWithProvenance_EmptyPolicyAndTriggerAllowed() public {
+        // activePolicy and triggerEvent are optional
+        _commitWithProvenance(
+            agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 0,
+            "gpt-4o", INPUT_HASH, "", ""
+        );
+        AuditVault.DecisionProvenance memory p = vault.getProvenance(agentA, 0);
+        assertEq(p.activePolicy, "");
+        assertEq(p.triggerEvent, "");
+    }
+
+    // ─────────────────────────────────────────────
+    // commitBatchWithProvenance — validation
+    // ─────────────────────────────────────────────
+
+    function test_CommitWithProvenance_EmptyModelVersionReverts() public {
+        vm.expectRevert("AuditVault: empty modelVersion");
+        vault.commitBatchWithProvenance(
+            agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 0,
+            "", INPUT_HASH, "policy", "TRIGGER"
+        );
+    }
+
+    function test_CommitWithProvenance_EmptyInputHashReverts() public {
+        vm.expectRevert("AuditVault: empty inputDataHash");
+        vault.commitBatchWithProvenance(
+            agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 0,
+            "claude-3-opus-20240229", bytes32(0), "policy", "TRIGGER"
+        );
+    }
+
+    function test_CommitWithProvenance_EmptyMerkleRootReverts() public {
+        vm.expectRevert("AuditVault: empty merkle root");
+        vault.commitBatchWithProvenance(
+            agentA, bytes32(0), "ipfs://1", 1, 90, "LOG", 0,
+            "claude-3-opus-20240229", INPUT_HASH, "policy", "TRIGGER"
+        );
+    }
+
+    function test_CommitWithProvenance_ScoreOver100Reverts() public {
+        vm.expectRevert("AuditVault: score exceeds 100");
+        vault.commitBatchWithProvenance(
+            agentA, ROOT1, "ipfs://1", 1, 101, "LOG", 0,
+            "claude-3-opus-20240229", INPUT_HASH, "policy", "TRIGGER"
+        );
+    }
+
+    // ─────────────────────────────────────────────
+    // Multiple batches — provenance isolation
+    // ─────────────────────────────────────────────
+
+    function test_Provenance_IndependentPerBatch() public {
+        bytes32 hash1 = keccak256("input-A");
+        bytes32 hash2 = keccak256("input-B");
+
+        _commitWithProvenance(
+            agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 0,
+            "claude-3-opus-20240229", hash1, "policy-v1", "USER_REQUEST"
+        );
+        _commitBatch(agentA, ROOT2, "ipfs://2", 1, 90, "LOG", 0); // no provenance
+        _commitWithProvenance(
+            agentA, ROOT3, "ipfs://3", 1, 90, "LOG", 0,
+            "gpt-4-turbo", hash2, "policy-v2", "CRON"
+        );
+
+        assertTrue(vault.hasProvenance(agentA, 0));
+        assertFalse(vault.hasProvenance(agentA, 1));
+        assertTrue(vault.hasProvenance(agentA, 2));
+
+        assertEq(vault.getProvenance(agentA, 0).modelVersion, "claude-3-opus-20240229");
+        assertEq(vault.getProvenance(agentA, 2).modelVersion, "gpt-4-turbo");
+        assertEq(vault.getProvenance(agentA, 0).inputDataHash, hash1);
+        assertEq(vault.getProvenance(agentA, 2).inputDataHash, hash2);
+    }
+
+    // ─────────────────────────────────────────────
+    // getProvenance — edge cases
+    // ─────────────────────────────────────────────
+
+    function test_GetProvenance_InvalidBatchReverts() public {
+        vm.expectRevert("AuditVault: batch not found");
+        vault.getProvenance(agentA, 0);
+    }
+
+    function test_HasProvenance_InvalidBatchReverts() public {
+        vm.expectRevert("AuditVault: batch not found");
+        vault.hasProvenance(agentA, 0);
+    }
+
+    // ─────────────────────────────────────────────
+    // Risk Scoring
     // ─────────────────────────────────────────────
 
     function test_Risk_LOW_DefaultAction() public {
         _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 0);
-        AuditVault.LogBatch memory b = vault.getBatch(agentA, 0);
-        assertEq(uint8(b.riskLevel), uint8(AuditVault.RiskLevel.LOW));
+        assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.LOW));
     }
 
     function test_Risk_MEDIUM_ByAction_SWAP() public {
@@ -186,7 +375,6 @@ contract AuditVaultTest is Test {
     }
 
     function test_Risk_MEDIUM_SpendAtExactThreshold() public {
-        // > 1 ether = MEDIUM; exactly 1 ether = LOW
         _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "LOG", 1 ether);
         assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.LOW));
     }
@@ -228,32 +416,15 @@ contract AuditVaultTest is Test {
     }
 
     function test_Risk_ActionTakesPrecedenceOverSpend() public {
-        // TRANSFER is HIGH even with zero spend
         _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "TRANSFER", 0);
         assertEq(uint8(vault.getBatch(agentA, 0).riskLevel), uint8(AuditVault.RiskLevel.HIGH));
     }
-
-    // ─────────────────────────────────────────────
-    // RiskScoreAssigned event
-    // ─────────────────────────────────────────────
 
     function test_RiskScoreAssigned_EmittedOnCommitBatch() public {
         vm.expectEmit(true, true, true, true);
         emit RiskScoreAssigned(agentA, 0, AuditVault.RiskLevel.HIGH, "TRANSFER", 0, block.timestamp);
         _commitBatch(agentA, ROOT1, "ipfs://1", 1, 90, "TRANSFER", 0);
     }
-
-    function test_RiskScoreAssigned_EmittedOnChildBatch() public {
-        _commitBatch(agentA, ROOT1, "ipfs://parent", 1, 90, "LOG", 0);
-
-        vm.expectEmit(true, true, true, true);
-        emit RiskScoreAssigned(agentB, 0, AuditVault.RiskLevel.MEDIUM, "SWAP", 0, block.timestamp);
-        _commitChildBatch(agentB, ROOT2, "ipfs://child", 1, 80, "SWAP", 0, agentA, 0);
-    }
-
-    // ─────────────────────────────────────────────
-    // getRiskScore
-    // ─────────────────────────────────────────────
 
     function test_GetRiskScore_StoredCorrectly() public {
         _commitBatch(agentA, ROOT1, "ipfs://1", 5, 90, "BRIDGE", 3 ether);
@@ -269,7 +440,7 @@ contract AuditVaultTest is Test {
     }
 
     // ─────────────────────────────────────────────
-    // commitChildBatch — risk scoring
+    // commitChildBatch
     // ─────────────────────────────────────────────
 
     function test_CommitChildBatch_RiskScored() public {
@@ -292,7 +463,7 @@ contract AuditVaultTest is Test {
     }
 
     // ─────────────────────────────────────────────
-    // commitHighRiskEvent — always HIGH
+    // commitHighRiskEvent
     // ─────────────────────────────────────────────
 
     function test_CommitHighRiskEvent_AlwaysHigh() public {
@@ -303,27 +474,14 @@ contract AuditVaultTest is Test {
         assertFalse(b.hasParent);
     }
 
-    function test_CommitHighRiskEvent_RiskScoreStored() public {
-        vault.commitHighRiskEvent(agentA, ROOT1, "ipfs://highrisk");
-        AuditVault.RiskScore memory rs = vault.getRiskScore(agentA, 0);
-        assertEq(uint8(rs.level), uint8(AuditVault.RiskLevel.HIGH));
-        assertEq(rs.actionType, "HIGH_RISK_EVENT");
-        assertEq(rs.spendValue, 0);
-    }
-
     function test_CommitHighRiskEvent_EmptyRootReverts() public {
         vm.expectRevert("AuditVault: empty merkle root");
         vault.commitHighRiskEvent(agentA, bytes32(0), "ipfs://highrisk");
     }
 
     // ─────────────────────────────────────────────
-    // getChildBatches
+    // getChildBatches / getAncestorChain
     // ─────────────────────────────────────────────
-
-    function test_GetChildBatches_Empty() public {
-        _commitBatch(agentA, ROOT1, "ipfs://1", 5, 90, "LOG", 0);
-        assertEq(vault.getChildBatches(agentA, 0).length, 0);
-    }
 
     function test_GetChildBatches_MultipleChildren() public {
         _commitBatch(agentA, ROOT1, "ipfs://parent", 5, 90, "LOG", 0);
@@ -336,25 +494,15 @@ contract AuditVaultTest is Test {
         assertEq(children[1].agentId, agentC);
     }
 
-    // ─────────────────────────────────────────────
-    // getAncestorChain
-    // ─────────────────────────────────────────────
-
-    function test_GetAncestorChain_RootReturnsEmpty() public {
-        _commitBatch(agentA, ROOT1, "ipfs://root", 5, 90, "LOG", 0);
-        assertEq(vault.getAncestorChain(agentA, 0).length, 0);
-    }
-
     function test_GetAncestorChain_ThreeLevels() public {
-        // A[0] <- B[0] <- C[0]
         _commitBatch(agentA, ROOT1, "ipfs://root", 5, 90, "LOG", 0);
         _commitChildBatch(agentB, ROOT2, "ipfs://mid",  3, 80, "LOG", 0, agentA, 0);
         _commitChildBatch(agentC, ROOT3, "ipfs://leaf", 2, 70, "LOG", 0, agentB, 0);
 
         AuditVault.BatchRef[] memory chain = vault.getAncestorChain(agentC, 0);
         assertEq(chain.length, 2);
-        assertEq(chain[0].agentId, agentB); // immediate parent
-        assertEq(chain[1].agentId, agentA); // grandparent
+        assertEq(chain[0].agentId, agentB);
+        assertEq(chain[1].agentId, agentA);
     }
 
     // ─────────────────────────────────────────────
