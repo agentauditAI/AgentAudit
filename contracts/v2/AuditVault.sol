@@ -14,13 +14,16 @@ contract AuditVault {
     // ─────────────────────────────────────────────
 
     struct LogBatch {
-        bytes32 merkleRoot;   // Merkle root of all log hashes in this batch
-        string  contentURI;   // IPFS CID or Arweave txId with full log payload
-        uint256 timestamp;    // block.timestamp at commit time
-        uint256 blockNumber;  // block number for cross-referencing
-        uint256 eventCount;   // number of events in this batch
-        address submitter;    // address that submitted this batch
-        uint8   complianceScore; // 0-100 EU AI Act compliance score for this batch
+        bytes32 merkleRoot;       // Merkle root of all log hashes in this batch
+        string  contentURI;       // IPFS CID or Arweave txId with full log payload
+        uint256 timestamp;        // block.timestamp at commit time
+        uint256 blockNumber;      // block number for cross-referencing
+        uint256 eventCount;       // number of events in this batch
+        address submitter;        // address that submitted this batch
+        uint8   complianceScore;  // 0-100 EU AI Act compliance score for this batch
+        bool    hasParent;        // true if this batch is a child in an audit chain
+        address parentAgentId;    // agentId of the parent batch (zero if root)
+        uint256 parentBatchIndex; // index of the parent batch (zero if root)
     }
 
     struct AgentInfo {
@@ -30,6 +33,12 @@ contract AuditVault {
         string  network;      // e.g. "Mantle", "Arbitrum"
         uint256 registeredAt;
         uint256 totalEvents;
+    }
+
+    /// @notice Reference to a specific batch by agent + index
+    struct BatchRef {
+        address agentId;
+        uint256 batchIndex;
     }
 
     // ─────────────────────────────────────────────
@@ -44,6 +53,9 @@ contract AuditVault {
 
     // agentId => total events logged across all batches
     mapping(address => uint256) public agentEventCount;
+
+    // parentAgentId => parentBatchIndex => list of direct child BatchRefs
+    mapping(address => mapping(uint256 => BatchRef[])) private _childBatches;
 
     // global batch count
     uint256 public totalBatches;
@@ -63,6 +75,19 @@ contract AuditVault {
     event LogBatchCommitted(
         address indexed agentId,
         uint256 indexed batchIndex,
+        bytes32 merkleRoot,
+        string  contentURI,
+        uint256 eventCount,
+        uint8   complianceScore,
+        uint256 timestamp
+    );
+
+    /// @notice Emitted when a child batch is committed as part of a multi-agent chain
+    event ChildBatchCommitted(
+        address indexed agentId,
+        uint256 indexed batchIndex,
+        address indexed parentAgentId,
+        uint256 parentBatchIndex,
         bytes32 merkleRoot,
         string  contentURI,
         uint256 eventCount,
@@ -107,10 +132,10 @@ contract AuditVault {
     }
 
     // ─────────────────────────────────────────────
-    // Batch Commit (main write function)
+    // Batch Commit (main write functions)
     // ─────────────────────────────────────────────
 
-    /// @notice Commit a batch of agent action logs on-chain
+    /// @notice Commit a root batch of agent action logs (no parent)
     /// @param agentId         Address of the AI agent
     /// @param merkleRoot      Merkle root of all log hashes in this batch
     /// @param contentURI      IPFS CID or Arweave txId with full log payload
@@ -131,13 +156,16 @@ contract AuditVault {
         uint256 batchIndex = _agentBatches[agentId].length;
 
         _agentBatches[agentId].push(LogBatch({
-            merkleRoot:      merkleRoot,
-            contentURI:      contentURI,
-            timestamp:       block.timestamp,
-            blockNumber:     block.number,
-            eventCount:      eventCount,
-            submitter:       msg.sender,
-            complianceScore: complianceScore
+            merkleRoot:       merkleRoot,
+            contentURI:       contentURI,
+            timestamp:        block.timestamp,
+            blockNumber:      block.number,
+            eventCount:       eventCount,
+            submitter:        msg.sender,
+            complianceScore:  complianceScore,
+            hasParent:        false,
+            parentAgentId:    address(0),
+            parentBatchIndex: 0
         }));
 
         agentEventCount[agentId] += eventCount;
@@ -147,6 +175,73 @@ contract AuditVault {
         emit LogBatchCommitted(
             agentId,
             batchIndex,
+            merkleRoot,
+            contentURI,
+            eventCount,
+            complianceScore,
+            block.timestamp
+        );
+    }
+
+    /// @notice Commit a child batch linked to a parent agent's batch
+    /// @dev Establishes a parent/child relationship on-chain for multi-agent audit chains.
+    ///      The parent batch must already exist. Cycles are structurally impossible because
+    ///      a parent must be committed before any child can reference it.
+    /// @param agentId           Address of the child AI agent
+    /// @param merkleRoot        Merkle root of all log hashes in this batch
+    /// @param contentURI        IPFS CID or Arweave txId with full log payload
+    /// @param eventCount        Number of events in this batch
+    /// @param complianceScore   EU AI Act compliance score 0-100
+    /// @param parentAgentId     Address of the parent agent
+    /// @param parentBatchIndex  Index of the parent batch within parentAgentId's batch array
+    function commitChildBatch(
+        address agentId,
+        bytes32 merkleRoot,
+        string  calldata contentURI,
+        uint256 eventCount,
+        uint8   complianceScore,
+        address parentAgentId,
+        uint256 parentBatchIndex
+    ) external {
+        require(merkleRoot != bytes32(0), "AuditVault: empty merkle root");
+        require(bytes(contentURI).length > 0, "AuditVault: empty contentURI");
+        require(eventCount > 0, "AuditVault: zero event count");
+        require(complianceScore <= 100, "AuditVault: score exceeds 100");
+        require(parentAgentId != address(0), "AuditVault: zero parent agent");
+        require(
+            parentBatchIndex < _agentBatches[parentAgentId].length,
+            "AuditVault: parent batch not found"
+        );
+
+        uint256 batchIndex = _agentBatches[agentId].length;
+
+        _agentBatches[agentId].push(LogBatch({
+            merkleRoot:       merkleRoot,
+            contentURI:       contentURI,
+            timestamp:        block.timestamp,
+            blockNumber:      block.number,
+            eventCount:       eventCount,
+            submitter:        msg.sender,
+            complianceScore:  complianceScore,
+            hasParent:        true,
+            parentAgentId:    parentAgentId,
+            parentBatchIndex: parentBatchIndex
+        }));
+
+        _childBatches[parentAgentId][parentBatchIndex].push(BatchRef({
+            agentId:    agentId,
+            batchIndex: batchIndex
+        }));
+
+        agentEventCount[agentId] += eventCount;
+        _agents[agentId].totalEvents += eventCount;
+        totalBatches++;
+
+        emit ChildBatchCommitted(
+            agentId,
+            batchIndex,
+            parentAgentId,
+            parentBatchIndex,
             merkleRoot,
             contentURI,
             eventCount,
@@ -166,13 +261,16 @@ contract AuditVault {
 
         // High-risk events are committed as single-event batches with score 0
         _agentBatches[agentId].push(LogBatch({
-            merkleRoot:      merkleRoot,
-            contentURI:      contentURI,
-            timestamp:       block.timestamp,
-            blockNumber:     block.number,
-            eventCount:      1,
-            submitter:       msg.sender,
-            complianceScore: 0
+            merkleRoot:       merkleRoot,
+            contentURI:       contentURI,
+            timestamp:        block.timestamp,
+            blockNumber:      block.number,
+            eventCount:       1,
+            submitter:        msg.sender,
+            complianceScore:  0,
+            hasParent:        false,
+            parentAgentId:    address(0),
+            parentBatchIndex: 0
         }));
 
         agentEventCount[agentId] += 1;
@@ -220,7 +318,64 @@ contract AuditVault {
     }
 
     // ─────────────────────────────────────────────
-    // Read Functions
+    // Multi-Agent Chain Read Functions
+    // ─────────────────────────────────────────────
+
+    /// @notice Get all direct children of a given batch
+    /// @param parentAgentId    Address of the parent agent
+    /// @param parentBatchIndex Index of the parent batch
+    /// @return Array of BatchRef pointing to each child batch
+    function getChildBatches(address parentAgentId, uint256 parentBatchIndex)
+        external view returns (BatchRef[] memory)
+    {
+        require(
+            parentBatchIndex < _agentBatches[parentAgentId].length,
+            "AuditVault: parent batch not found"
+        );
+        return _childBatches[parentAgentId][parentBatchIndex];
+    }
+
+    /// @notice Traverse the parent chain from a given batch up to the root
+    /// @dev Returns ancestors in order: immediate parent first, root last.
+    ///      Bounded to 32 hops to prevent unbounded gas in view calls.
+    /// @param agentId    Address of the starting agent
+    /// @param batchIndex Index of the starting batch
+    /// @return chain     Ordered list of ancestor BatchRefs (parent → … → root)
+    function getAncestorChain(address agentId, uint256 batchIndex)
+        external view returns (BatchRef[] memory chain)
+    {
+        uint256 maxDepth = 32;
+        BatchRef[] memory temp = new BatchRef[](maxDepth);
+        uint256 depth = 0;
+
+        address currentAgent = agentId;
+        uint256 currentBatch = batchIndex;
+
+        while (depth < maxDepth) {
+            require(
+                currentBatch < _agentBatches[currentAgent].length,
+                "AuditVault: batch not found"
+            );
+            LogBatch storage b = _agentBatches[currentAgent][currentBatch];
+            if (!b.hasParent) break;
+
+            temp[depth] = BatchRef({
+                agentId:    b.parentAgentId,
+                batchIndex: b.parentBatchIndex
+            });
+            depth++;
+            currentAgent = b.parentAgentId;
+            currentBatch = b.parentBatchIndex;
+        }
+
+        chain = new BatchRef[](depth);
+        for (uint256 i = 0; i < depth; i++) {
+            chain[i] = temp[i];
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Standard Read Functions
     // ─────────────────────────────────────────────
 
     /// @notice Get a specific batch for an agent
