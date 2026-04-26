@@ -2,7 +2,13 @@ require("dotenv").config();
 require("@nomicfoundation/hardhat-toolbox");
 
 module.exports = {
-  solidity: "0.8.20",
+  solidity: {
+    version: "0.8.20",
+    settings: {
+      viaIR: true,
+      optimizer: { enabled: true, runs: 200 },
+    },
+  },
   networks: {
     arbitrumSepolia: {
       url: "https://sepolia-rollup.arbitrum.io/rpc",

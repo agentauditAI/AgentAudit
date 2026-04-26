@@ -15,6 +15,14 @@ contract AuditVault {
 
     enum RiskLevel { LOW, MEDIUM, HIGH }
 
+    enum TriggerEvent {
+        USER_REQUEST,
+        SCHEDULED,
+        ALERT,
+        POLICY_CHANGE,
+        ANOMALY
+    }
+
     struct LogBatch {
         bytes32   merkleRoot;       // Merkle root of all log hashes in this batch
         string    contentURI;       // IPFS CID or Arweave txId with full log payload
@@ -55,11 +63,11 @@ contract AuditVault {
     /// @notice Explains WHY an agent acted — causal provenance for a batch of decisions.
     ///         Stored separately so existing callers using commitBatch() are unaffected.
     struct DecisionProvenance {
-        string  modelVersion;  // AI model that produced the decisions e.g. "claude-3-opus-20240229"
-        bytes32 inputDataHash; // keccak256 of the full input (prompt + context) — privacy-preserving
-        string  activePolicy;  // policy name active at decision time e.g. "eu-ai-act-limited-v2"
-        string  triggerEvent;  // what caused this batch e.g. "USER_REQUEST", "PRICE_ALERT", "CRON"
-        uint256 timestamp;     // block.timestamp when provenance was recorded
+        string       modelVersion;  // AI model that produced the decisions e.g. "claude-3-opus-20240229"
+        bytes32      inputDataHash; // keccak256 of the full input (prompt + context) — privacy-preserving
+        bytes32      activePolicy;  // keccak256 of the policy document hash — tamper-evident reference
+        TriggerEvent triggerEvent;  // enum: what category of event caused this batch
+        uint256      timestamp;     // block.timestamp when provenance was recorded
     }
 
     // ─────────────────────────────────────────────
@@ -148,13 +156,13 @@ contract AuditVault {
     ///         inputDataHash is indexed so off-chain systems can find every batch
     ///         that was triggered by the same input (e.g. detect replay or drift).
     event DecisionProvenanceLogged(
-        address indexed agentId,
-        uint256 indexed batchIndex,
-        bytes32 indexed inputDataHash,
-        string  modelVersion,
-        string  activePolicy,
-        string  triggerEvent,
-        uint256 timestamp
+        address      indexed agentId,
+        uint256      indexed batchIndex,
+        bytes32      indexed inputDataHash,
+        string       modelVersion,
+        bytes32      activePolicy,
+        TriggerEvent triggerEvent,
+        uint256      timestamp
     );
 
     // ─────────────────────────────────────────────
@@ -217,20 +225,20 @@ contract AuditVault {
     /// @param spendValue     Total spend value in wei
     /// @param modelVersion   AI model identifier e.g. "claude-3-opus-20240229"
     /// @param inputDataHash  keccak256 of the full input (prompt + context) — hash locally, not the raw data
-    /// @param activePolicy   Policy name active at decision time e.g. "eu-ai-act-limited-v2"
-    /// @param triggerEvent   What caused this batch e.g. "USER_REQUEST", "PRICE_ALERT", "CRON"
+    /// @param activePolicy   keccak256 of the policy document — tamper-evident reference
+    /// @param triggerEvent   TriggerEvent enum value indicating what caused this batch
     function commitBatchWithProvenance(
-        address agentId,
-        bytes32 merkleRoot,
-        string  calldata contentURI,
-        uint256 eventCount,
-        uint8   complianceScore,
-        string  calldata actionType,
-        uint256 spendValue,
-        string  calldata modelVersion,
-        bytes32 inputDataHash,
-        string  calldata activePolicy,
-        string  calldata triggerEvent
+        address      agentId,
+        bytes32      merkleRoot,
+        string       calldata contentURI,
+        uint256      eventCount,
+        uint8        complianceScore,
+        string       calldata actionType,
+        uint256      spendValue,
+        string       calldata modelVersion,
+        bytes32      inputDataHash,
+        bytes32      activePolicy,
+        TriggerEvent triggerEvent
     ) external {
         require(bytes(modelVersion).length > 0,  "AuditVault: empty modelVersion");
         require(inputDataHash != bytes32(0),      "AuditVault: empty inputDataHash");
@@ -367,12 +375,12 @@ contract AuditVault {
     // ─────────────────────────────────────────────
 
     function _storeProvenance(
-        address agentId,
-        uint256 batchIndex,
-        string  memory modelVersion,
-        bytes32 inputDataHash,
-        string  memory activePolicy,
-        string  memory triggerEvent
+        address      agentId,
+        uint256      batchIndex,
+        string       memory modelVersion,
+        bytes32      inputDataHash,
+        bytes32      activePolicy,
+        TriggerEvent triggerEvent
     ) internal {
         _provenances[agentId][batchIndex] = DecisionProvenance({
             modelVersion:  modelVersion,
