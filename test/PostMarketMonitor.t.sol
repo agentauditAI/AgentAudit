@@ -359,7 +359,7 @@ contract PostMarketMonitorTest is Test {
         vm.prank(reporter);
         monitor.recordReview(agent, 8000, "ok");
 
-        (,,,,,uint256 lastReview,) = monitor.plans(agent);
+        (,,,,,,uint256 lastReview,) = monitor.plans(agent);
         assertEq(lastReview, block.timestamp);
     }
 

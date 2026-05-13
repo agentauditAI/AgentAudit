@@ -214,8 +214,8 @@ contract PostMarketMonitor {
      */
     function setReporter(address agent, address reporter, bool authorized)
         external
-        onlyOwner(agent)
         isEnrolled(agent)
+        onlyOwner(agent)
     {
         reporters[agent][reporter] = authorized;
         emit ReporterAuthorized(agent, reporter, authorized, block.timestamp);
@@ -243,8 +243,8 @@ contract PostMarketMonitor {
         bytes32 txRef
     )
         external
-        onlyReporter(agent)
         isEnrolled(agent)
+        onlyReporter(agent)
         isActive(agent)
     {
         AlertLevel level = _computeAlertLevel(metricType, value, threshold);
@@ -296,8 +296,8 @@ contract PostMarketMonitor {
         string calldata notes
     )
         external
-        onlyReporter(agent)
         isEnrolled(agent)
+        onlyReporter(agent)
         isActive(agent)
     {
         if (complianceScore < 0 || complianceScore > 10000) revert InvalidScore(complianceScore);
@@ -318,8 +318,8 @@ contract PostMarketMonitor {
      */
     function deactivate(address agent, string calldata reason)
         external
-        onlyOwner(agent)
         isEnrolled(agent)
+        onlyOwner(agent)
     {
         plans[agent].active = false;
         emit PlanDeactivated(agent, msg.sender, reason, block.timestamp);
@@ -437,8 +437,8 @@ contract PostMarketMonitor {
             int256 diff = value - threshold;
             int256 pct = threshold > 0 ? (diff * 10000) / threshold : int256(10000);
             if (pct <= 1000)  return AlertLevel.LOW;
-            if (pct <= 5000)  return AlertLevel.MEDIUM;
-            if (pct <= 10000) return AlertLevel.HIGH;
+            if (pct <= 10000) return AlertLevel.MEDIUM;
+            if (pct <= 50000) return AlertLevel.HIGH;
             return AlertLevel.CRITICAL;
         }
     }
