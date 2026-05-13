@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AgentAudit — On-Chain Audit Logs for AI Agents</title>
-  <meta name="description" content="Immutable on-chain audit logs for AI agents. EU AI Act compliant. Every action traceable, tamper-proof, auditable." />
+  <title>AgentAudit AI — On-Chain EU AI Act Compliance for Autonomous Agents</title>
+  <meta name="description" content="Immutable on-chain audit trails for autonomous AI agents. EU AI Act compliant across 5 blockchain networks. Know Your Agent — before it acts on your behalf." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <style>
@@ -18,6 +18,7 @@
       --green-dim: #00cc6a;
       --green-glow: rgba(0,255,136,0.12);
       --amber: #ffb800;
+      --red: #ff4444;
       --text: #e8f5e8;
       --text-dim: #7a9e7a;
       --mono: 'IBM Plex Mono', monospace;
@@ -25,15 +26,8 @@
     }
 
     html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); overflow-x: hidden; }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--sans);
-      overflow-x: hidden;
-    }
-
-    /* ── Grid background ── */
     body::before {
       content: '';
       position: fixed;
@@ -48,348 +42,195 @@
 
     /* ── Nav ── */
     nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
       padding: 1.25rem 2.5rem;
-      background: rgba(10,15,10,0.85);
+      background: rgba(10,15,10,0.9);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
     }
-
-    .nav-logo {
-      font-family: var(--mono);
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--green);
-      letter-spacing: 0.05em;
-      text-decoration: none;
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 2rem;
-      list-style: none;
-    }
-
-    .nav-links a {
-      font-family: var(--mono);
-      font-size: 0.8rem;
-      color: var(--text-dim);
-      text-decoration: none;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      transition: color 0.2s;
-    }
-
+    .nav-logo { font-family: var(--mono); font-size: 1rem; font-weight: 600; color: var(--green); letter-spacing: 0.05em; text-decoration: none; }
+    .nav-links { display: flex; gap: 2rem; list-style: none; }
+    .nav-links a { font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim); text-decoration: none; letter-spacing: 0.08em; text-transform: uppercase; transition: color 0.2s; }
     .nav-links a:hover { color: var(--green); }
 
     /* ── Hero ── */
     .hero {
-      position: relative;
-      z-index: 1;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 8rem 2rem 4rem;
-      text-align: center;
+      position: relative; z-index: 1; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 8rem 2rem 4rem; text-align: center;
     }
 
     .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      color: var(--green);
-      background: var(--green-glow);
-      border: 1px solid rgba(0,255,136,0.25);
-      border-radius: 2px;
-      padding: 0.35rem 0.85rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      margin-bottom: 2rem;
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-family: var(--mono); font-size: 0.72rem; color: var(--green);
+      background: var(--green-glow); border: 1px solid rgba(0,255,136,0.25);
+      border-radius: 2px; padding: 0.35rem 0.85rem;
+      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 2rem;
     }
+    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
 
-    .badge::before {
-      content: '';
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--green);
-      animation: pulse 2s infinite;
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-
-    h1 {
-      font-family: var(--sans);
-      font-size: clamp(1.9rem, 4.5vw, 3.4rem);
-      font-weight: 800;
-      line-height: 1.1;
-      letter-spacing: -0.03em;
-      margin-bottom: 1.5rem;
-      max-width: 900px;
-    }
-
+    h1 { font-family: var(--sans); font-size: clamp(1.9rem, 4.5vw, 3.4rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.03em; margin-bottom: 1.5rem; max-width: 900px; }
     h1 span { color: var(--green); }
 
-    .tagline {
-      font-family: var(--mono);
-      font-size: clamp(0.9rem, 2vw, 1.1rem);
-      color: var(--text-dim);
-      max-width: 560px;
-      line-height: 1.7;
+    .tagline { font-family: var(--mono); font-size: clamp(0.9rem, 2vw, 1.05rem); color: var(--text-dim); max-width: 580px; line-height: 1.7; margin-bottom: 2rem; }
+
+    /* ── Countdown bar ── */
+    .countdown-bar {
+      display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center;
       margin-bottom: 3rem;
     }
-
-    .cta-group {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      justify-content: center;
+    .countdown-item {
+      display: flex; flex-direction: column; align-items: center;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 0.75rem 1.25rem; min-width: 140px;
     }
+    .countdown-days { font-family: var(--mono); font-size: 1.8rem; font-weight: 600; color: var(--green); line-height: 1; }
+    .countdown-label { font-family: var(--mono); font-size: 0.65rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 0.3rem; }
+    .countdown-sub { font-family: var(--mono); font-size: 0.62rem; color: var(--amber); letter-spacing: 0.08em; margin-top: 0.15rem; }
 
-    .btn-primary {
-      font-family: var(--mono);
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--bg);
-      background: var(--green);
-      border: none;
-      padding: 0.85rem 2rem;
-      cursor: pointer;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      text-decoration: none;
-      transition: background 0.2s, transform 0.1s;
-    }
+    .cta-group { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
 
-    .btn-primary:hover {
-      background: var(--green-dim);
-      transform: translateY(-1px);
-    }
+    .btn-primary { font-family: var(--mono); font-size: 0.85rem; font-weight: 600; color: var(--bg); background: var(--green); border: none; padding: 0.85rem 2rem; cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; transition: background 0.2s, transform 0.1s; }
+    .btn-primary:hover { background: var(--green-dim); transform: translateY(-1px); }
+    .btn-ghost { font-family: var(--mono); font-size: 0.85rem; color: var(--text-dim); background: transparent; border: 1px solid var(--border); padding: 0.85rem 2rem; cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; transition: border-color 0.2s, color 0.2s; }
+    .btn-ghost:hover { border-color: var(--green); color: var(--green); }
 
-    .btn-ghost {
-      font-family: var(--mono);
-      font-size: 0.85rem;
-      color: var(--text-dim);
-      background: transparent;
-      border: 1px solid var(--border);
-      padding: 0.85rem 2rem;
-      cursor: pointer;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      text-decoration: none;
-      transition: border-color 0.2s, color 0.2s;
-    }
-
-    .btn-ghost:hover {
-      border-color: var(--green);
-      color: var(--green);
-    }
-
-    /* ── Log stream animation ── */
+    /* ── Log stream ── */
     .log-stream {
-      margin-top: 5rem;
-      width: 100%;
-      max-width: 700px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 1.5rem;
-      font-family: var(--mono);
-      font-size: 0.78rem;
-      text-align: left;
-      position: relative;
-      overflow: hidden;
+      margin-top: 4rem; width: 100%; max-width: 700px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1.5rem;
+      font-family: var(--mono); font-size: 0.78rem; text-align: left;
+      position: relative; overflow: hidden;
     }
-
-    .log-stream::before {
-      content: 'LIVE AUDIT LOG';
-      position: absolute;
-      top: 1rem; right: 1rem;
-      font-size: 0.65rem;
-      color: var(--green);
-      letter-spacing: 0.1em;
-    }
-
-    .log-line {
-      display: flex;
-      gap: 1rem;
-      padding: 0.3rem 0;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-      opacity: 0;
-      animation: fadeIn 0.4s forwards;
-    }
-
+    .log-stream::before { content: 'LIVE AUDIT LOG'; position: absolute; top: 1rem; right: 1rem; font-size: 0.65rem; color: var(--green); letter-spacing: 0.1em; }
+    .log-line { display: flex; gap: 1rem; padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); opacity: 0; animation: fadeIn 0.4s forwards; }
     .log-line:last-child { border-bottom: none; }
-
-    @keyframes fadeIn {
-      to { opacity: 1; }
-    }
-
+    @keyframes fadeIn { to { opacity: 1; } }
     .log-time { color: var(--text-dim); min-width: 85px; }
-    .log-action { color: var(--green); min-width: 180px; }
+    .log-action { color: var(--green); min-width: 200px; }
     .log-hash { color: var(--amber); }
 
+    /* ── Networks strip ── */
+    .networks-strip {
+      position: relative; z-index: 1;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 2rem 2.5rem;
+      overflow-x: auto;
+    }
+    .networks-inner { display: flex; gap: 0; max-width: 1100px; margin: 0 auto; }
+    .network-item {
+      flex: 1; min-width: 180px;
+      padding: 1.25rem 1.5rem;
+      border-right: 1px solid var(--border);
+    }
+    .network-item:last-child { border-right: none; }
+    .network-name { font-family: var(--mono); font-size: 0.9rem; font-weight: 600; color: var(--green); margin-bottom: 0.25rem; }
+    .network-status { font-family: var(--mono); font-size: 0.65rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem; }
+    .network-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+    .network-addr { font-family: var(--mono); font-size: 0.62rem; color: var(--text-dim); }
+    .network-addr a { color: var(--text-dim); text-decoration: none; }
+    .network-addr a:hover { color: var(--green); }
+
     /* ── Sections ── */
-    section {
-      position: relative;
-      z-index: 1;
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 6rem 2rem;
-    }
-
-    .section-label {
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      color: var(--green);
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      margin-bottom: 1rem;
-    }
-
-    h2 {
-      font-size: clamp(1.8rem, 4vw, 2.8rem);
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 1rem;
-    }
-
-    .section-sub {
-      font-family: var(--mono);
-      color: var(--text-dim);
-      font-size: 0.9rem;
-      line-height: 1.7;
-      max-width: 540px;
-      margin-bottom: 3rem;
-    }
+    section { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 6rem 2rem; }
+    .section-label { font-family: var(--mono); font-size: 0.72rem; color: var(--green); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1rem; }
+    h2 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 1rem; }
+    .section-sub { font-family: var(--mono); color: var(--text-dim); font-size: 0.9rem; line-height: 1.7; max-width: 540px; margin-bottom: 3rem; }
 
     /* ── Feature grid ── */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1.5px;
-      background: var(--border);
-      border: 1px solid var(--border);
-    }
-
-    .feature {
-      background: var(--surface);
-      padding: 2rem;
-    }
-
-    .feature-icon {
-      font-size: 1.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .feature h3 {
-      font-size: 1rem;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-      letter-spacing: -0.01em;
-    }
-
-    .feature p {
-      font-family: var(--mono);
-      font-size: 0.78rem;
-      color: var(--text-dim);
-      line-height: 1.6;
-    }
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5px; background: var(--border); border: 1px solid var(--border); }
+    .feature { background: var(--surface); padding: 2rem; }
+    .feature-icon { font-size: 1.5rem; margin-bottom: 1rem; }
+    .feature h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; letter-spacing: -0.01em; }
+    .feature p { font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim); line-height: 1.6; }
 
     /* ── EU AI Act table ── */
-    .compliance-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-family: var(--mono);
-      font-size: 0.82rem;
-      margin-top: 2rem;
-    }
-
-    .compliance-table th {
-      text-align: left;
-      padding: 0.75rem 1rem;
-      color: var(--text-dim);
-      font-weight: 500;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.72rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .compliance-table td {
-      padding: 0.85rem 1rem;
-      border-bottom: 1px solid var(--border);
-      color: var(--text);
-      line-height: 1.5;
-    }
-
-    .compliance-table td:first-child {
-      color: var(--green);
-      white-space: nowrap;
-    }
-
+    .compliance-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 0.82rem; margin-top: 2rem; }
+    .compliance-table th { text-align: left; padding: 0.75rem 1rem; color: var(--text-dim); font-weight: 500; border-bottom: 1px solid var(--border); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+    .compliance-table td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); color: var(--text); line-height: 1.5; }
+    .compliance-table td:first-child { color: var(--green); white-space: nowrap; }
     .compliance-table tr:last-child td { border-bottom: none; }
+    .tag-live { font-size: 0.62rem; background: var(--green-glow); color: var(--green); border: 1px solid rgba(0,255,136,0.3); padding: 0.1rem 0.4rem; letter-spacing: 0.08em; margin-left: 0.4rem; vertical-align: middle; }
+    .tag-ph7 { font-size: 0.62rem; background: rgba(255,184,0,0.1); color: var(--amber); border: 1px solid rgba(255,184,0,0.3); padding: 0.1rem 0.4rem; letter-spacing: 0.08em; margin-left: 0.4rem; vertical-align: middle; }
+
+    /* ── Plugins ── */
+    .plugins-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5px; background: var(--border); border: 1px solid var(--border); margin-top: 2rem; }
+    .plugin-card { background: var(--surface); padding: 1.75rem; }
+    .plugin-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .plugin-icon { font-size: 1.25rem; }
+    .plugin-name { font-family: var(--mono); font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .plugin-status { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em; padding: 0.15rem 0.5rem; }
+    .plugin-status.live { color: var(--green); background: var(--green-glow); border: 1px solid rgba(0,255,136,0.3); }
+    .plugin-status.soon { color: var(--amber); background: rgba(255,184,0,0.08); border: 1px solid rgba(255,184,0,0.25); }
+    .plugin-desc { font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 1rem; }
+    .plugin-code { background: var(--bg); border: 1px solid var(--border); padding: 0.6rem 0.85rem; font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); }
+    .plugin-code .kw { color: var(--green); }
+    .plugin-code .str { color: var(--amber); }
+
+    /* ── Wave 1 CTA ── */
+    .wave1-section {
+      position: relative; z-index: 1;
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, var(--surface) 0%, rgba(0,255,136,0.04) 100%);
+      padding: 5rem 2rem;
+      text-align: center;
+    }
+    .wave1-inner { max-width: 700px; margin: 0 auto; }
+    .wave1-badge { font-family: var(--mono); font-size: 0.7rem; color: var(--amber); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1.5rem; }
+    .wave1-title { font-size: clamp(1.6rem, 3.5vw, 2.4rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 1rem; }
+    .wave1-title span { color: var(--green); }
+    .wave1-sub { font-family: var(--mono); font-size: 0.88rem; color: var(--text-dim); line-height: 1.7; margin-bottom: 2rem; max-width: 520px; margin-left: auto; margin-right: auto; }
+    .wave1-perks { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.5rem; }
+    .wave1-perk { font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim); display: flex; align-items: center; gap: 0.4rem; }
+    .wave1-perk::before { content: '✓'; color: var(--green); font-weight: 700; }
+    .deadline-counter { font-family: var(--mono); font-size: 0.75rem; color: var(--amber); margin-top: 1.5rem; }
+    .spots-left { font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); margin-top: 0.5rem; letter-spacing: 0.05em; }
 
     /* ── Code block ── */
-    .code-block {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 1.5rem;
-      font-family: var(--mono);
-      font-size: 0.82rem;
-      line-height: 1.7;
-      overflow-x: auto;
-      margin-top: 2rem;
-    }
-
+    .code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1.5rem; font-family: var(--mono); font-size: 0.82rem; line-height: 1.7; overflow-x: auto; margin-top: 2rem; }
     .code-block .kw { color: var(--green); }
     .code-block .str { color: var(--amber); }
     .code-block .cmt { color: var(--text-dim); }
     .code-block .fn { color: #88ddff; }
 
     /* ── Footer ── */
-    footer {
-      position: relative;
-      z-index: 1;
-      border-top: 1px solid var(--border);
-      padding: 2.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-family: var(--mono);
-      font-size: 0.75rem;
-      color: var(--text-dim);
-    }
-
-    footer a { color: var(--text-dim); text-decoration: none; }
-    footer a:hover { color: var(--green); }
+    footer { position: relative; z-index: 1; border-top: 1px solid var(--border); padding: 3rem 2.5rem; font-family: var(--mono); font-size: 0.75rem; color: var(--text-dim); }
+    .footer-inner { max-width: 1100px; margin: 0 auto; }
+    .footer-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem; flex-wrap: wrap; margin-bottom: 2rem; }
+    .footer-brand { font-size: 0.9rem; color: var(--green); font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .footer-tagline { color: var(--text-dim); font-size: 0.72rem; max-width: 240px; line-height: 1.6; }
+    .footer-links { display: flex; gap: 3rem; flex-wrap: wrap; }
+    .footer-col-title { color: var(--text); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.75rem; }
+    .footer-col a { display: block; color: var(--text-dim); text-decoration: none; font-size: 0.72rem; line-height: 1.9; }
+    .footer-col a:hover { color: var(--green); }
+    .footer-bottom { border-top: 1px solid var(--border); padding-top: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .footer-bottom a { color: var(--text-dim); text-decoration: none; }
+    .footer-bottom a:hover { color: var(--green); }
 
     @media (max-width: 640px) {
       nav { padding: 1rem 1.5rem; }
       .nav-links { display: none; }
-      footer { flex-direction: column; gap: 1rem; text-align: center; }
+      .networks-inner { flex-direction: column; }
+      .network-item { border-right: none; border-bottom: 1px solid var(--border); }
+      .footer-top { flex-direction: column; }
+      .footer-bottom { flex-direction: column; text-align: center; }
     }
   </style>
 </head>
 <body>
 
   <nav>
-    <a class="nav-logo" href="#">AgentAudit</a>
+    <a class="nav-logo" href="#">AgentAudit AI</a>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
       <li><a href="#compliance">EU AI Act</a></li>
+      <li><a href="#integrations">Integrations</a></li>
       <li><a href="#quickstart">SDK</a></li>
       <li><a href="https://github.com/agentauditAI/AgentAudit" target="_blank">GitHub</a></li>
     </ul>
@@ -397,21 +238,42 @@
 
   <!-- HERO -->
   <div class="hero">
-    <div class="badge">EU AI Act Compliant · On-Chain Logging</div>
+    <div class="badge">EU AI Act Compliant · 5 Networks Live · ERC-8004</div>
 
-    <h1>Every agent action.<br /><span>Immutably logged.</span></h1>
+    <h1>Every AI Agent<br /><span>Needs a Witness.</span></h1>
 
     <p class="tagline">
-      August 2, 2026 · Art. 50 &amp; transparency rules.<br />December 2, 2027 · High-risk AI systems (Annex III) · Digital Omnibus.<br />Do you have the evidence?
+      Immutable on-chain audit trails for autonomous AI agents.<br />
+      EU AI Act compliant across 5 blockchain networks.<br />
+      Know Your Agent — before it acts on your behalf.
     </p>
 
-    <div class="cta-group">
-      <a href="https://github.com/agentauditAI/AgentAudit" class="btn-primary" target="_blank">View on GitHub</a>
-      <a href="#quickstart" class="btn-ghost">Quick Start</a>
+    <!-- Dynamic countdown -->
+    <div class="countdown-bar" id="countdownBar">
+      <div class="countdown-item">
+        <div class="countdown-days" id="days50">—</div>
+        <div class="countdown-label">Art. 50 · Transparency</div>
+        <div class="countdown-sub">Aug 2, 2026</div>
+      </div>
+      <div class="countdown-item">
+        <div class="countdown-days" id="daysMiCA">—</div>
+        <div class="countdown-label">MiCA Enforcement</div>
+        <div class="countdown-sub">Jul 1, 2026</div>
+      </div>
+      <div class="countdown-item">
+        <div class="countdown-days" id="daysAnnex">—</div>
+        <div class="countdown-label">Annex III High-Risk</div>
+        <div class="countdown-sub">Dec 2, 2027</div>
+      </div>
     </div>
 
-    <!-- Animated log stream -->
-    <div class="log-stream" id="logStream">
+    <div class="cta-group">
+      <a href="https://getagentaudit.xyz/dashboard.html" class="btn-primary">Open Dashboard</a>
+      <a href="https://github.com/agentauditAI/AgentAudit" class="btn-ghost" target="_blank">View on GitHub</a>
+      <a href="#wave1" class="btn-ghost">Get Free Pilot →</a>
+    </div>
+
+    <div class="log-stream">
       <div class="log-line" style="animation-delay:0.2s">
         <span class="log-time">13:42:07</span>
         <span class="log-action">TRANSFER_APPROVED</span>
@@ -419,12 +281,12 @@
       </div>
       <div class="log-line" style="animation-delay:0.6s">
         <span class="log-time">13:42:11</span>
-        <span class="log-action">POLICY_CHECK_PASSED</span>
+        <span class="log-action">RISK_SCORE_HIGH</span>
         <span class="log-hash">0x7d1b...f044</span>
       </div>
       <div class="log-line" style="animation-delay:1.0s">
         <span class="log-time">13:42:19</span>
-        <span class="log-action">SPEND_LIMIT_ENFORCED</span>
+        <span class="log-action">ZK_PROOF_VERIFIED</span>
         <span class="log-hash">0xa92c...3e17</span>
       </div>
       <div class="log-line" style="animation-delay:1.4s">
@@ -440,125 +302,376 @@
     </div>
   </div>
 
+  <!-- NETWORKS STRIP -->
+  <div class="networks-strip">
+    <div class="networks-inner">
+      <div class="network-item">
+        <div class="network-name">Mantle</div>
+        <div class="network-status">Live</div>
+        <div class="network-addr"><a href="https://explorer.mantle.xyz/address/0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b" target="_blank">0xD008...054b ↗</a></div>
+      </div>
+      <div class="network-item">
+        <div class="network-name">Base</div>
+        <div class="network-status">Live</div>
+        <div class="network-addr"><a href="https://basescan.org/address/0x556C4275EE68869C6874C343d0Cb7Fc3C8910873" target="_blank">0x556C...873 ↗</a></div>
+      </div>
+      <div class="network-item">
+        <div class="network-name">Arbitrum One</div>
+        <div class="network-status">Live</div>
+        <div class="network-addr"><a href="https://arbiscan.io/address/0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" target="_blank">0x3057...450C ↗</a></div>
+      </div>
+      <div class="network-item">
+        <div class="network-name">Optimism</div>
+        <div class="network-status">Live</div>
+        <div class="network-addr"><a href="https://optimistic.etherscan.io/address/0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" target="_blank">0x3057...450C ↗</a></div>
+      </div>
+      <div class="network-item">
+        <div class="network-name">Polygon</div>
+        <div class="network-status">Live</div>
+        <div class="network-addr"><a href="https://polygonscan.com/address/0x6fC00423Df95a7caf6fFFDD93169b5C01480de02" target="_blank">0x6fC0...de02 ↗</a></div>
+      </div>
+    </div>
+  </div>
+
   <!-- FEATURES -->
   <section id="features">
-    <div class="section-label">// Why AgentAudit</div>
+    <div class="section-label">// Why AgentAudit AI</div>
     <h2>Audit logs that can't be altered.</h2>
     <p class="section-sub">
       Off-chain logs can be modified. Databases can be wiped.
-      On-chain logs are permanent by design.
+      On-chain logs are permanent by design — across 5 networks simultaneously.
     </p>
     <div class="features">
       <div class="feature">
         <div class="feature-icon">🔗</div>
         <h3>Immutable Storage</h3>
-        <p>Every action written to the blockchain. No admin key. No delete function. No exceptions.</p>
+        <p>Every action written to the blockchain. No admin key. No delete function. No exceptions. 5 networks, one SDK.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">🕐</div>
-        <h3>Tamper-Proof Timestamps</h3>
-        <p>Block timestamps and block numbers provide cryptographic proof of when each action occurred.</p>
+        <div class="feature-icon">🔐</div>
+        <h3>ZK-Proof Layer</h3>
+        <p>ZKAuditProof.sol — prove compliance without revealing sensitive data. 169 tests passing. Regulator-ready.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">🇪🇺</div>
-        <h3>EU AI Act Ready</h3>
-        <p>Satisfies Articles 12, 13, 14, and 17 logging requirements out of the box.</p>
+        <h3>EU AI Act Native</h3>
+        <p>Satisfies Articles 9, 11, 12, 13, 14, 19, 26, 72, 73. Legal co-founder with EU AI Act expertise.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🤖</div>
+        <h3>ERC-8004 Standard</h3>
+        <p>Full implementation of Trustless Agents standard. Only EU AI Act-aware ERC-8004 reference implementation.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📋</div>
+        <h3>Auto-Generated Reports</h3>
+        <p>EUAIActReporter.sol generates audit-ready compliance reports automatically. 127 tests passing.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">⚡</div>
-        <h3>TypeScript SDK</h3>
-        <p>Drop-in integration for any AI agent runtime. Two lines of code to start logging.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🔍</div>
-        <h3>Per-Agent Queries</h3>
-        <p>Query full audit history for any agent address. Filter, export, verify.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🌐</div>
-        <h3>Multi-Chain</h3>
-        <p>Live on Mantle. Arbitrum, Base, and more coming. Same SDK, any chain.</p>
+        <h3>MCP Server + SDK</h3>
+        <p>4 on-chain tools via MCP protocol. TypeScript SDK with ElizaOS + LangChain integrations.</p>
       </div>
     </div>
   </section>
 
   <!-- EU AI ACT -->
   <section id="compliance">
-    <div class="section-label">// Compliance</div>
-    <h2>Built for EU AI Act.</h2>
+    <div class="section-label">// Compliance Coverage</div>
+    <h2>Built article by article.</h2>
     <p class="section-sub">
-      High-risk AI systems must maintain logs. AgentAudit makes compliance automatic.
+      Every EU AI Act requirement mapped to a specific on-chain contract.
+      Not a checkbox — an immutable evidence layer.
     </p>
     <table class="compliance-table">
       <thead>
         <tr>
           <th>Article</th>
           <th>Requirement</th>
-          <th>How AgentAudit Satisfies It</th>
+          <th>AgentAudit Contract</th>
         </tr>
       </thead>
       <tbody>
-            <tr>
-              <td>Art. 9</td>
-              <td>Risk management system</td>
-              <td>On-chain audit trail as risk evidence</td>
-            </tr>
         <tr>
-          <td>Art. 12</td>
-          <td>Record-keeping for high-risk AI systems</td>
-          <td>Immutable on-chain log per every agent action</td>
+          <td>Art. 9<span class="tag-live">LIVE</span></td>
+          <td>Risk management system</td>
+          <td>AuditVault + Risk Scoring HIGH/MEDIUM/LOW</td>
         </tr>
         <tr>
-          <td>Art. 13</td>
+          <td>Art. 11<span class="tag-ph7">PH7</span></td>
+          <td>Technical documentation (AIBOM)</td>
+          <td>AIBOMRegistry.sol — CycloneDX 1.6 schema</td>
+        </tr>
+        <tr>
+          <td>Art. 12<span class="tag-live">LIVE</span></td>
+          <td>Record-keeping for high-risk AI systems</td>
+          <td>AuditVault — immutable on-chain log per action</td>
+        </tr>
+        <tr>
+          <td>Art. 13<span class="tag-live">LIVE</span></td>
           <td>Transparency and information to users</td>
-          <td>Every action timestamped and publicly readable on-chain</td>
-        </tr><tr>
-              <td>Art. 19</td>
-              <td>Logging requirements</td>
-              <td>Automatic per-action logging via AuditVault</td>
-            </tr>
-            <tr>
-              <td>Art. 26</td>
-              <td>Obligations for deployers</td>
-              <td>AgentRegistration + KYA fields enforced on-chain</td>
-            </tr>
-            <tr>
-              <td>Art. 72</td>
-              <td>Post-market monitoring</td>
-              <td>Continuous on-chain activity log, permanently queryable</td>
-            </tr>
+          <td>Every action timestamped, publicly readable on-chain</td>
+        </tr>
+        <tr>
+          <td>Art. 14<span class="tag-live">LIVE</span></td>
+          <td>Human oversight</td>
+          <td>Dashboard + on-chain override mechanisms</td>
+        </tr>
+        <tr>
+          <td>Art. 19<span class="tag-live">LIVE</span></td>
+          <td>Logging requirements</td>
+          <td>Automatic per-action logging via AuditVault</td>
+        </tr>
+        <tr>
+          <td>Art. 26<span class="tag-live">LIVE</span></td>
+          <td>Obligations for deployers</td>
+          <td>AgentRegistration + KYA fields enforced on-chain</td>
+        </tr>
+        <tr>
+          <td>Art. 50<span class="tag-live">LIVE</span></td>
+          <td>AI content transparency</td>
+          <td>Decision Provenance + on-chain logs</td>
+        </tr>
+        <tr>
+          <td>Art. 72<span class="tag-ph7">PH7</span></td>
+          <td>Post-market monitoring</td>
+          <td>PostMarketMonitor.sol — continuous activity log</td>
+        </tr>
+        <tr>
+          <td>Art. 73<span class="tag-ph7">PH7</span></td>
+          <td>Incident reporting (15/10/2 day timelines)</td>
+          <td>IncidentRegistry.sol — automated reporting</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- INTEGRATIONS / PLUGINS -->
+  <section id="integrations">
+    <div class="section-label">// Integrations</div>
+    <h2>Plug in. Stay compliant.</h2>
+    <p class="section-sub">
+      Drop-in integrations for the most popular AI agent frameworks.
+      One SDK, any chain, any runtime.
     </p>
-    <div class="code-block">
-      <span class="cmt">// Install</span><br />
-      npm install @agentaudit/sdk<br />
-      <br />
-      <span class="cmt">// Usage</span><br />
-      <span class="kw">import</span> { AgentAudit } <span class="kw">from</span> <span class="str">'@agentaudit/sdk'</span>;<br />
-      <br />
-      <span class="kw">const</span> audit = <span class="kw">new</span> <span class="fn">AgentAudit</span>({<br />
-      &nbsp;&nbsp;contractAddress: <span class="str">'0x...'</span>,<br />
-      &nbsp;&nbsp;rpcUrl: <span class="str">'https://rpc.sepolia.mantle.xyz'</span>,<br />
-      &nbsp;&nbsp;privateKey: process.env.<span class="fn">AGENT_PRIVATE_KEY</span>,<br />
-      });<br />
-      <br />
-      <span class="cmt">// Log an action — returns txHash + logIndex</span><br />
-      <span class="kw">const</span> receipt = <span class="kw">await</span> audit.<span class="fn">log</span>({<br />
-      &nbsp;&nbsp;action: <span class="str">'TRANSFER_APPROVED'</span>,<br />
-      &nbsp;&nbsp;metadata: { amount: <span class="str">'100 USDC'</span>, recipient: <span class="str">'0x...'</span> },<br />
-      });<br />
-      <br />
-      console.<span class="fn">log</span>(receipt.txHash); <span class="cmt">// on-chain proof ✅</span>
+    <div class="plugins-grid">
+      <div class="plugin-card">
+        <div class="plugin-header">
+          <div class="plugin-icon">🦄</div>
+          <div class="plugin-name">ElizaOS Plugin</div>
+          <div class="plugin-status soon">Coming Soon</div>
+        </div>
+        <p class="plugin-desc">Native @elizaos/plugin-agentaudit — automatic EU AI Act logging for every ElizaOS agent action. Zero config.</p>
+        <div class="plugin-code">
+          <span class="kw">import</span> agentAuditPlugin <span class="kw">from</span> <span class="str">'@elizaos/plugin-agentaudit'</span>;<br />
+          character.plugins.push(agentAuditPlugin);
+        </div>
+      </div>
+      <div class="plugin-card">
+        <div class="plugin-header">
+          <div class="plugin-icon">🔗</div>
+          <div class="plugin-name">LangChain Handler</div>
+          <div class="plugin-status soon">Coming Soon</div>
+        </div>
+        <p class="plugin-desc">Callback handler for LangChain agents. Every LLM call, tool use, and chain step logged on-chain automatically.</p>
+        <div class="plugin-code">
+          <span class="kw">const</span> chain = <span class="kw">new</span> AgentExecutor({<br />
+          &nbsp;&nbsp;callbacks: [<span class="kw">new</span> AgentAuditHandler()]<br />
+          });
+        </div>
+      </div>
+      <div class="plugin-card">
+        <div class="plugin-header">
+          <div class="plugin-icon">🖥️</div>
+          <div class="plugin-name">MCP Server</div>
+          <div class="plugin-status live">Live</div>
+        </div>
+        <p class="plugin-desc">4 on-chain tools via Model Context Protocol. Works with Claude, Cursor, and any MCP-compatible runtime.</p>
+        <div class="plugin-code">
+          npx @agentauditai/mcp-server<br />
+          <span class="str"># tools: logAction, getAuditLog,</span><br />
+          <span class="str"># verifyProof, getReport</span>
+        </div>
+      </div>
+      <div class="plugin-card">
+        <div class="plugin-header">
+          <div class="plugin-icon">📦</div>
+          <div class="plugin-name">TypeScript SDK</div>
+          <div class="plugin-status live">Live</div>
+        </div>
+        <p class="plugin-desc">@agentauditai/sdk — universal SDK for any TypeScript agent. Supports all 5 networks. Two lines to start logging.</p>
+        <div class="plugin-code">
+          npm install @agentauditai/sdk<br />
+          <span class="kw">const</span> audit = <span class="kw">new</span> AgentAudit({ network: <span class="str">'base'</span> });<br />
+          <span class="kw">await</span> audit.log({ action: <span class="str">'TRANSFER'</span> });
+        </div>
+      </div>
     </div>
   </section>
 
+  <!-- QUICKSTART -->
+  <section id="quickstart">
+    <div class="section-label">// Quick Start</div>
+    <h2>Two lines to compliance.</h2>
+    <p class="section-sub">
+      Open-source core. Drop into any AI agent runtime in minutes.
+    </p>
+    <div class="code-block">
+      <span class="cmt">// Install</span><br />
+      npm install @agentauditai/sdk<br />
+      <br />
+      <span class="cmt">// Initialize — pick any of 5 networks</span><br />
+      <span class="kw">import</span> { AgentAudit } <span class="kw">from</span> <span class="str">'@agentauditai/sdk'</span>;<br />
+      <br />
+      <span class="kw">const</span> audit = <span class="kw">new</span> <span class="fn">AgentAudit</span>({<br />
+      &nbsp;&nbsp;network: <span class="str">'base'</span>, <span class="cmt">// mantle | base | arbitrum | optimism | polygon</span><br />
+      &nbsp;&nbsp;privateKey: process.env.<span class="fn">AGENT_PRIVATE_KEY</span>,<br />
+      });<br />
+      <br />
+      <span class="cmt">// Log any action — returns txHash on-chain</span><br />
+      <span class="kw">const</span> receipt = <span class="kw">await</span> audit.<span class="fn">log</span>({<br />
+      &nbsp;&nbsp;action: <span class="str">'TRANSFER_APPROVED'</span>,<br />
+      &nbsp;&nbsp;riskLevel: <span class="str">'HIGH'</span>,<br />
+      &nbsp;&nbsp;metadata: { amount: <span class="str">'100 USDC'</span>, recipient: <span class="str">'0x...'</span> },<br />
+      });<br />
+      <br />
+      console.<span class="fn">log</span>(receipt.txHash); <span class="cmt">// EU AI Act Art. 12 ✅</span>
+    </div>
+  </section>
+
+  <!-- WAVE 1 CTA -->
+  <div class="wave1-section" id="wave1">
+    <div class="wave1-inner">
+      <div class="wave1-badge">⚡ Wave 1 Founding Members — 5 Spots Globally</div>
+      <h2 class="wave1-title">$25K value.<br /><span>$0 cost.</span></h2>
+      <p class="wave1-sub">
+        Get full AgentAudit AI infrastructure — all 5 networks, all contracts,
+        SDK + MCP server — completely free as a Founding Member pilot.
+        Aug 2 deadline is not a suggestion.
+      </p>
+      <div class="wave1-perks">
+        <div class="wave1-perk">Full EU AI Act coverage</div>
+        <div class="wave1-perk">5 networks live</div>
+        <div class="wave1-perk">Dedicated onboarding</div>
+        <div class="wave1-perk">Case study featured</div>
+        <div class="wave1-perk">No lock-in</div>
+      </div>
+      <div class="cta-group" style="justify-content:center">
+        <a href="mailto:hello@getagentaudit.xyz?subject=Wave 1 Founding Member" class="btn-primary">Apply for Free Pilot</a>
+        <a href="https://getagentaudit.xyz/dashboard.html" class="btn-ghost">See Dashboard</a>
+      </div>
+      <div class="deadline-counter" id="wave1Deadline"></div>
+      <div class="spots-left">5 spots · 0 cost · May 31, 2026 deadline</div>
+    </div>
+  </div>
+
   <footer>
-    <span>AgentAudit · MIT License</span>
-    <span>
-      <a href="https://github.com/agentauditAI/AgentAudit" target="_blank">GitHub</a>
-      &nbsp;·&nbsp;
-      <a href="https://getshieldai.xyz" target="_blank">ShieldAI</a>
-    </span>
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div>
+          <div class="footer-brand">AgentAudit AI</div>
+          <div class="footer-tagline">A RunLockAI product. On-chain EU AI Act compliance for autonomous AI agents.</div>
+        </div>
+        <div class="footer-links">
+          <div class="footer-col">
+            <div class="footer-col-title">Product</div>
+            <a href="https://getagentaudit.xyz/dashboard.html">Dashboard</a>
+            <a href="#quickstart">SDK Docs</a>
+            <a href="#integrations">Integrations</a>
+            <a href="https://github.com/agentauditAI/AgentAudit" target="_blank">GitHub (MIT)</a>
+          </div>
+          <div class="footer-col">
+            <div class="footer-col-title">Networks</div>
+            <a href="https://explorer.mantle.xyz/address/0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b" target="_blank">Mantle ↗</a>
+            <a href="https://basescan.org/address/0x556C4275EE68869C6874C343d0Cb7Fc3C8910873" target="_blank">Base ↗</a>
+            <a href="https://arbiscan.io/address/0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" target="_blank">Arbitrum One ↗</a>
+            <a href="https://optimistic.etherscan.io/address/0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" target="_blank">Optimism ↗</a>
+            <a href="https://polygonscan.com/address/0x6fC00423Df95a7caf6fFFDD93169b5C01480de02" target="_blank">Polygon ↗</a>
+          </div>
+          <div class="footer-col">
+            <div class="footer-col-title">RunLockAI</div>
+            <a href="https://getshieldai.xyz" target="_blank">ShieldAI</a>
+            <a href="#wave1">Wave 1 Pilot</a>
+            <a href="https://github.com/agentauditAI/AgentAudit/blob/main/docs/KYA_STANDARD.md" target="_blank">KYA Standard</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>AgentAudit AI — a RunLockAI product · MIT License</span>
+        <span>ERC-8004 Reference Implementation · <a href="https://github.com/agentauditAI/AgentAudit" target="_blank">agentauditAI/AgentAudit</a></span>
+      </div>
+    </div>
   </footer>
+
+  <script>
+    // Dynamic countdown
+    function daysUntil(dateStr) {
+      const target = new Date(dateStr);
+      const now = new Date();
+      now.setHours(0,0,0,0);
+      target.setHours(0,0,0,0);
+      const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
+      return diff;
+    }
+
+    function updateCountdowns() {
+      const d50 = daysUntil('2026-08-02');
+      const dMiCA = daysUntil('2026-07-01');
+      const dAnnex = daysUntil('2027-12-02');
+
+      document.getElementById('days50').textContent = d50 > 0 ? d50 : 'LIVE';
+      document.getElementById('daysMiCA').textContent = dMiCA > 0 ? dMiCA : 'LIVE';
+      document.getElementById('daysAnnex').textContent = dAnnex > 0 ? dAnnex : 'LIVE';
+
+      // Wave 1 deadline
+      const dWave1 = daysUntil('2026-05-31');
+      const el = document.getElementById('wave1Deadline');
+      if (el) {
+        el.textContent = dWave1 > 0
+          ? `⏱ ${dWave1} days until Wave 1 closes`
+          : 'Wave 1 closed';
+      }
+    }
+
+    updateCountdowns();
+
+    // Animated log stream — live timestamps
+    const actions = [
+      'TRANSFER_APPROVED', 'RISK_SCORE_HIGH', 'ZK_PROOF_VERIFIED',
+      'AUDIT_LOG_WRITTEN', 'COMPLIANCE_VERIFIED', 'POLICY_CHECK_PASSED',
+      'INCIDENT_REPORTED', 'HUMAN_OVERRIDE', 'AIBOM_REGISTERED'
+    ];
+
+    function randomHash() {
+      const hex = '0123456789abcdef';
+      let h = '0x';
+      for (let i = 0; i < 4; i++) h += hex[Math.floor(Math.random()*16)];
+      h += '...';
+      for (let i = 0; i < 4; i++) h += hex[Math.floor(Math.random()*16)];
+      return h;
+    }
+
+    function addLogLine() {
+      const stream = document.getElementById('logStream');
+      if (!stream) return;
+      const lines = stream.querySelectorAll('.log-line');
+      if (lines.length > 6) lines[0].remove();
+
+      const now = new Date();
+      const time = now.toTimeString().slice(0,8);
+      const action = actions[Math.floor(Math.random()*actions.length)];
+      const hash = randomHash();
+
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      line.style.animation = 'none';
+      line.style.opacity = '1';
+      line.innerHTML = `<span class="log-time">${time}</span><span class="log-action">${action}</span><span class="log-hash">${hash}</span>`;
+      stream.appendChild(line);
+    }
+
+    setTimeout(() => setInterval(addLogLine, 2800), 3000);
+  </script>
 
 </body>
 </html>
