@@ -5,6 +5,8 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
+    "test:api": "jest",
+    "api": "ts-node src/api/server.ts",
     "deploy:mantle-sepolia": "hardhat run scripts/deploy.ts --network mantleSepolia",
     "deploy:arbitrum-sepolia": "hardhat run scripts/deploy.ts --network arbitrumSepolia",
     "deploy:mantle": "hardhat run scripts/deploy.ts --network mantle",
@@ -12,10 +14,21 @@
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
-    "hardhat": "^2.22.0",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "@types/supertest": "^7.2.0",
     "dotenv": "^16.0.0",
-    "typescript": "^5.0.0",
+    "hardhat": "^2.22.0",
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.0",
-    "@types/node": "^20.0.0"
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "ethers": "^6.16.0",
+    "express": "^5.2.1",
+    "zod": "^4.4.3"
   }
 }
