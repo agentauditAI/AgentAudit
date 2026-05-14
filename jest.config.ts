@@ -3,7 +3,11 @@ import type { Config } from "jest";
 const config: Config = {
   preset: "ts-jest",
   testEnvironment: "node",
-  testMatch: ["**/test/api/**/*.test.ts", "**/test/sdk/**/*.test.ts"],
+  testMatch: [
+    "**/test/api/**/*.test.ts",
+    "**/test/sdk/**/*.test.ts",
+    "**/test/plugin/**/*.test.js",
+  ],
   moduleFileExtensions: ["ts", "js"],
   transform: {
     // ethers v6 types use #privateField syntax that trips ts-jest diagnostics;
