@@ -45,6 +45,7 @@ sdk/src/openai.ts    ← AuditedOpenAI wrapper
 sdk/src/anthropic.ts ← AuditedAnthropic wrapper
 sdk/src/langchain.ts ← AgentAuditCallbackHandler + withAudit()
 plugin-elizaos/      ← ElizaOS plugin (do not modify — separately versioned)
+test/plugin/         ← Jest tests for the ElizaOS plugin (CommonJS .js)
 scripts/             ← Hardhat deployment scripts
 docs/                ← Architecture, compliance, threat-model docs
 lib/forge-std/       ← Foundry standard library (do not edit)
@@ -142,6 +143,26 @@ Extends `BaseCallbackHandler` — the idiomatic LangChain approach. Attach to an
 - **Express 5 typing quirk**: `req.params.x` is typed `string | string[]` — always cast with `String(req.params.x)`
 - Networks: mantle, base, arbitrum, optimism, polygon — base/arbitrum/optimism/polygon require env vars to be set or routes return 503
 - Tests live in `test/api/server.test.ts` using Jest + supertest; the `chain.ts` module is mocked entirely — tests never touch a real network
+
+## ElizaOS Plugin (`plugin-elizaos/`)
+
+The plugin is a standalone CommonJS package — **do not modify it** without understanding its versioning separately from the rest of the repo.
+
+- Entry point: `plugin-elizaos/index.js`; exports `agentAuditPlugin` with `name`, `description`, `actions[]`, and `middleware`
+- Uses `ethers` directly (not the SDK) with its own network config and ABIs
+- Reads config from `AUDIT_*` env vars: `AUDIT_PRIVATE_KEY`, `AUDIT_NETWORK`, `AUDIT_AGENT_ID`, `AUDIT_INCIDENT_REGISTRY`, `AUDIT_MONITOR_ADDRESS`, `AUDIT_AUTO_LOG`
+- 6 actions: `REGISTER_AGENT`, `LOG_AUDIT`, `LOG_AUDIT_BATCH`, `REPORT_INCIDENT`, `RECORD_METRIC`, `AUDIT_STATUS`
+- **Known quirk**: `RECORD_METRIC` uses `options?.metricType || 3` — so `metricType: 0` silently falls back to `3` (uses `||` not `??`)
+- Middleware auto-logs every message when `AUDIT_AUTO_LOG=true`; failures are swallowed silently so the agent is never blocked
+
+### Plugin test conventions (`test/plugin/index.test.js`)
+
+- CommonJS `.js` file — picked up by jest config via `**/test/plugin/**/*.test.js`; transformed by `babel-jest` (no ts-jest needed)
+- `ethers` is fully mocked via `jest.mock("ethers", () => ({ ethers: { ... } }))` — no real RPC calls
+- Env vars are set at the top of the file (before `require`) so the plugin's load-time `console.warn` is suppressed
+- `mockContract` is rebuilt in `beforeEach` so each test starts with a clean mock
+- Action handlers are accessed by name: `plugin.actions.find(a => a.name === "LOG_AUDIT")`
+- Always test both `validate` (env var presence) and `handler` (happy path + error path) for every action
 
 ## What Not to Do
 
