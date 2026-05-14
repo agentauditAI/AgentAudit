@@ -34,16 +34,21 @@ npm run deploy:arbitrum   # deploy to Arbitrum One
 ## File Layout
 
 ```
-contracts/v2/    ← production contracts (active development)
-contracts/v1/    ← legacy v1 (do not modify)
-test/            ← Foundry test files (*.t.sol)
-test/api/        ← Jest + supertest API tests (*.test.ts)
-src/api/         ← REST API gateway (Express + TypeScript)
-sdk/src/         ← TypeScript SDK wrapping on-chain contracts
-scripts/         ← Hardhat deployment scripts
-docs/            ← Architecture, compliance, threat-model docs
-lib/forge-std/   ← Foundry standard library (do not edit)
-out/             ← Foundry build artifacts (do not edit or commit)
+contracts/v2/        ← production contracts (active development)
+contracts/v1/        ← legacy v1 (do not modify)
+test/                ← Foundry test files (*.t.sol)
+test/api/            ← Jest + supertest API tests
+test/sdk/            ← Jest SDK wrapper tests
+src/api/             ← REST API gateway (Express + TypeScript)
+sdk/src/index.ts     ← core AgentAudit SDK (ethers v6, on-chain logging)
+sdk/src/openai.ts    ← AuditedOpenAI wrapper
+sdk/src/anthropic.ts ← AuditedAnthropic wrapper
+sdk/src/langchain.ts ← AgentAuditCallbackHandler + withAudit()
+plugin-elizaos/      ← ElizaOS plugin (do not modify — separately versioned)
+scripts/             ← Hardhat deployment scripts
+docs/                ← Architecture, compliance, threat-model docs
+lib/forge-std/       ← Foundry standard library (do not edit)
+out/                 ← Foundry build artifacts (do not edit or commit)
 ```
 
 ## Solidity Conventions
@@ -91,15 +96,40 @@ When adding features, note the relevant article in NatSpec.
 - Reentrancy: use checks-effects-interactions order; add `nonReentrant` only when state is mutated before an external call
 - Access control: all privileged functions must revert with a typed custom error when called by unauthorized callers, and must have a corresponding test
 
-## OpenAI Wrapper (`sdk/src/openai.ts`)
+## SDK Wrappers (`sdk/src/`)
 
-`AuditedOpenAI` is a drop-in wrapper around the OpenAI client. Every `chat.completions.create` call is transparently logged on-chain via the AgentAudit SDK.
+All three wrappers share the same principles:
+- **Hashed payloads** — `prompt_hash` and `response_hash` are `sha256:` digests; raw content never touches the chain (see `docs/payload-best-practices.md`)
+- **`actionType`** is always `"LLM_DECISION"`
+- **`riskLevel`** defaults to `"HIGH"` if omitted
+- Tests in `test/sdk/*.test.ts` — AgentAudit SDK and LLM clients are fully mocked; no real network or API calls
+- **ts-jest `diagnostics: false`** is set in `jest.config.ts` because ethers v6 uses `#privateField` syntax in `.d.ts` files that trips ts-jest type-checking; root `tsconfig.json` still enforces types at build time
 
-- **Hashed payloads**: follows the payload-best-practices doc — `prompt_hash` and `response_hash` are sha256 digests; raw prompt/response text never touches the chain
-- **Non-streaming**: awaits the audit before returning; throws if audit fails (caller must handle)
-- **Streaming**: returns `AsyncIterable<ChatCompletionChunk>`; accumulates content via passthrough generator; logs in `finally` block (fire-and-forget after stream consumed, error goes to `console.error`)
-- `actionType` is always `"LLM_DECISION"`; `risk_level` defaults to `"HIGH"` if omitted
-- Tests in `test/sdk/openai.test.ts` — both OpenAI and the AgentAudit SDK are fully mocked; no real network or API calls
+### `sdk/src/openai.ts` — `AuditedOpenAI`
+
+Drop-in replacement for the `OpenAI` client. Wraps `chat.completions.create`.
+
+- **Non-streaming**: awaits audit before returning; throws if audit fails
+- **Streaming**: returns `AsyncIterable<ChatCompletionChunk>` via passthrough async generator; logs in `finally` block (fire-and-forget, errors go to `console.error`)
+
+### `sdk/src/anthropic.ts` — `AuditedAnthropic`
+
+Drop-in replacement for the `Anthropic` client. Wraps `messages.create`.
+
+- Same streaming/non-streaming split as `AuditedOpenAI`
+- `system` prompt is included in `prompt_hash`; `has_system: boolean` is recorded in the audit record
+- Response text is extracted by concatenating all `type: "text"` content blocks
+- Streaming accumulates text from `content_block_delta` + `text_delta` events; reads `input_tokens` from `message_start`, `output_tokens` from `message_delta`
+
+### `sdk/src/langchain.ts` — `AgentAuditCallbackHandler` + `withAudit()`
+
+Extends `BaseCallbackHandler` — the idiomatic LangChain approach. Attach to any model, chain, or agent; works for both streaming and non-streaming because LangChain always fires `handleLLMEnd` with the full output.
+
+- `handleChatModelStart` / `handleLLMStart` — store start time + prompt hash keyed by `runId`
+- `handleLLMEnd` — build audit record, log on-chain (fire-and-forget)
+- Concurrent `runId`s are tracked independently in a `Map`; run state is deleted after `handleLLMEnd`
+- Token extraction handles both OpenAI format (`tokenUsage.promptTokens`) and Anthropic format (`usage.input_tokens`)
+- `withAudit(model, config)` — convenience helper: attaches the callback via `.withConfig({ callbacks: [...] })`
 
 ## API Gateway (`src/api/`)
 
