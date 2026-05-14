@@ -91,6 +91,16 @@ When adding features, note the relevant article in NatSpec.
 - Reentrancy: use checks-effects-interactions order; add `nonReentrant` only when state is mutated before an external call
 - Access control: all privileged functions must revert with a typed custom error when called by unauthorized callers, and must have a corresponding test
 
+## OpenAI Wrapper (`sdk/src/openai.ts`)
+
+`AuditedOpenAI` is a drop-in wrapper around the OpenAI client. Every `chat.completions.create` call is transparently logged on-chain via the AgentAudit SDK.
+
+- **Hashed payloads**: follows the payload-best-practices doc — `prompt_hash` and `response_hash` are sha256 digests; raw prompt/response text never touches the chain
+- **Non-streaming**: awaits the audit before returning; throws if audit fails (caller must handle)
+- **Streaming**: returns `AsyncIterable<ChatCompletionChunk>`; accumulates content via passthrough generator; logs in `finally` block (fire-and-forget after stream consumed, error goes to `console.error`)
+- `actionType` is always `"LLM_DECISION"`; `risk_level` defaults to `"HIGH"` if omitted
+- Tests in `test/sdk/openai.test.ts` — both OpenAI and the AgentAudit SDK are fully mocked; no real network or API calls
+
 ## API Gateway (`src/api/`)
 
 - Entry point: `src/api/server.ts` — imports `app.ts` and calls `listen(3000)`

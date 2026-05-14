@@ -29,6 +29,7 @@
   "dependencies": {
     "ethers": "^6.16.0",
     "express": "^5.2.1",
+    "openai": "^6.37.0",
     "zod": "^4.4.3"
   }
 }
