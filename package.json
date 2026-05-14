@@ -10,7 +10,12 @@
     "deploy:mantle-sepolia": "hardhat run scripts/deploy.ts --network mantleSepolia",
     "deploy:arbitrum-sepolia": "hardhat run scripts/deploy.ts --network arbitrumSepolia",
     "deploy:mantle": "hardhat run scripts/deploy.ts --network mantle",
-    "deploy:arbitrum": "hardhat run scripts/deploy.ts --network arbitrumOne"
+    "deploy:arbitrum": "hardhat run scripts/deploy.ts --network arbitrumOne",
+    "deploy:phase7:mantle": "hardhat run scripts/deploy_phase7.ts --network mantle",
+    "deploy:phase7:base": "hardhat run scripts/deploy_phase7.ts --network base",
+    "deploy:phase7:arbitrum": "hardhat run scripts/deploy_phase7.ts --network arbitrumOne",
+    "deploy:phase7:optimism": "hardhat run scripts/deploy_phase7.ts --network optimism",
+    "deploy:phase7:polygon": "hardhat run scripts/deploy_phase7.ts --network polygon"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
