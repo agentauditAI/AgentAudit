@@ -1,0 +1,46 @@
+{
+  "name": "@agentauditai/sdk",
+  "version": "1.0.1",
+  "description": "On-chain EU AI Act compliance SDK for AI agents — immutable audit logs, KYA registration, incident reporting, post-market monitoring.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "eu-ai-act",
+    "compliance",
+    "blockchain",
+    "audit",
+    "ai-agents",
+    "mantle",
+    "arbitrum",
+    "base",
+    "optimism",
+    "polygon"
+  ],
+  "author": "agentauditAI",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.16.0"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.90.0",
+    "@langchain/core": ">=1.0.0",
+    "openai": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@langchain/core": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    }
+  }
+}
