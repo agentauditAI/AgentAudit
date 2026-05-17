@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentauditai-sdk"
+version = "1.0.0"
+description = "On-chain EU AI Act compliance SDK for AI agents — immutable audit logs, KYA registration, incident reporting, post-market monitoring."
+readme = "README.md"
+license = "MIT"
+authors = [{name = "agentauditAI"}]
+keywords = [
+    "eu-ai-act", "compliance", "blockchain", "audit",
+    "ai-agents", "mantle", "arbitrum", "base", "optimism", "polygon",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Security",
+]
+requires-python = ">=3.9"
+dependencies = ["requests>=2.28.0"]
+
+[project.urls]
+Homepage = "https://getagentaudit.xyz"
+Repository = "https://github.com/agentauditAI/AgentAudit"
+"Bug Tracker" = "https://github.com/agentauditAI/AgentAudit/issues"
+"npm package" = "https://www.npmjs.com/package/@agentauditai/sdk"
