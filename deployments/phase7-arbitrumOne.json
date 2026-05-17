@@ -1,0 +1,15 @@
+{
+  "network": "arbitrumOne",
+  "chainId": "42161",
+  "deployedAt": "2026-05-17T14:28:05.679Z",
+  "deployer": "0x5DB8E679B651183BF6919d8c11f44eaecC95Da6A",
+  "contracts": {
+    "AIBOMRegistry": "0xc05E2E62E639B4e879A4ab8069fCe8B58c3432CF",
+    "RiskManagementSystem": "0xd01DC1AbbaCB85b04344d83ae8fa6A89C716F2E4",
+    "HumanOversightRegistry": "0x1Fc52B09d9Aaa06E174A688f769A7298b616b377",
+    "IncidentRegistry": "0xA0f275b4D06925716544bA05313A63543fA3fDf5",
+    "ConformityAssessment": "0x18149c92D653d822980F32d5a9bd57a831158501",
+    "DataGovernanceRegistry": "0xB0dCc2205Ae3384Db0EE2F03CE589c31AF5bC225",
+    "QualityManagementSystem": "0x386a14Ffe6a6D4dFC451d072a90168e5bB867B09"
+  }
+}
