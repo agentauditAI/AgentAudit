@@ -43,6 +43,7 @@ module.exports = {
       url: process.env.OPTIMISM_RPC_URL || "https://mainnet.optimism.io",
       accounts,
       chainId: 10,
+      gasPrice: 2000000, // 0.002 gwei — outbids stuck txs on Optimism
     },
     polygon: {
       url: process.env.POLYGON_RPC_URL || "https://polygon-rpc.com",
