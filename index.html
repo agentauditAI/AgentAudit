@@ -213,6 +213,68 @@
     .footer-bottom a { color: var(--text-dim); text-decoration: none; }
     .footer-bottom a:hover { color: var(--green); }
 
+    /* ── Announcement strip ── */
+    .announce-strip {
+      position: relative; z-index: 99; margin-top: 64px;
+      background: linear-gradient(90deg, rgba(255,184,0,0.06) 0%, rgba(0,255,136,0.06) 100%);
+      border-bottom: 1px solid rgba(255,184,0,0.25);
+      padding: 0.7rem 2rem;
+      display: flex; align-items: center; justify-content: center; gap: 1.25rem; flex-wrap: wrap;
+      font-family: var(--mono); font-size: 0.74rem;
+    }
+    .announce-days { color: var(--green); font-weight: 600; font-size: 0.88rem; }
+    .announce-msg { color: var(--text-dim); }
+    .announce-link { color: var(--amber); text-decoration: none; border-bottom: 1px solid rgba(255,184,0,0.4); transition: color 0.2s; }
+    .announce-link:hover { color: var(--green); border-bottom-color: rgba(0,255,136,0.4); }
+
+    /* ── Install tabs ── */
+    .install-tabs { margin-top: 2rem; }
+    .install-tab-bar { display: flex; border-bottom: 1px solid var(--border); }
+    .install-tab {
+      font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 0.6rem 1.25rem; cursor: pointer; background: transparent; border: none;
+      color: var(--text-dim); border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .install-tab.active { color: var(--green); border-bottom-color: var(--green); }
+    .install-tab:hover:not(.active) { color: var(--text); }
+    .install-panel { display: none; }
+    .install-panel.active { display: block; }
+    .install-row {
+      background: var(--surface); border: 1px solid var(--border); border-top: none;
+      padding: 1rem 1.5rem; font-family: var(--mono); font-size: 0.9rem; color: var(--text);
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    }
+    .copy-btn {
+      font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim);
+      background: transparent; border: 1px solid var(--border); padding: 0.3rem 0.65rem;
+      cursor: pointer; white-space: nowrap; letter-spacing: 0.06em;
+      transition: color 0.2s, border-color 0.2s; flex-shrink: 0;
+    }
+    .copy-btn:hover, .copy-btn.copied { color: var(--green); border-color: var(--green); }
+    .install-extras { background: var(--surface); border: 1px solid var(--border); border-top: none; padding: 0.85rem 1.5rem; }
+    .install-extras .cmt { font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim); line-height: 1.7; }
+
+    /* ── Wave1 enhanced ── */
+    .wave1-section {
+      position: relative; z-index: 1;
+      border-top: 1px solid rgba(0,255,136,0.25); border-bottom: 1px solid rgba(0,255,136,0.25);
+      background: linear-gradient(135deg, var(--surface) 0%, rgba(0,255,136,0.05) 100%);
+      padding: 5rem 2rem; text-align: center;
+      box-shadow: inset 0 0 120px rgba(0,255,136,0.04);
+    }
+    .wave1-days-block { margin-bottom: 2rem; }
+    .wave1-days { font-family: var(--mono); font-size: clamp(3rem, 7vw, 5.5rem); font-weight: 600; color: var(--green); line-height: 1; }
+    .wave1-days-label { font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.18em; text-transform: uppercase; margin-top: 0.4rem; }
+    .wave1-btn-large {
+      font-family: var(--mono); font-size: 1rem; font-weight: 600; color: var(--bg);
+      background: var(--green); border: none; padding: 1.1rem 2.8rem;
+      cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase;
+      text-decoration: none; display: inline-block;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .wave1-btn-large:hover { background: var(--green-dim); transform: translateY(-2px); }
+
     @media (max-width: 640px) {
       nav { padding: 1rem 1.5rem; }
       .nav-links { display: none; }
@@ -233,8 +295,16 @@
       <li><a href="#integrations">Integrations</a></li>
       <li><a href="#quickstart">SDK</a></li>
       <li><a href="https://github.com/agentauditAI/AgentAudit" target="_blank">GitHub</a></li>
+      <li><a href="#wave1" style="color:var(--amber);border:1px solid rgba(255,184,0,0.35);padding:0.25rem 0.75rem;">Wave 1 →</a></li>
     </ul>
   </nav>
+
+  <!-- ANNOUNCEMENT STRIP -->
+  <div class="announce-strip">
+    <span class="announce-days" id="announceCountdown"></span>
+    <span class="announce-msg">Wave 1 Founding Members — 5 spots globally · $0 · Full EU AI Act stack</span>
+    <a href="#wave1" class="announce-link">Apply before May 31 →</a>
+  </div>
 
   <!-- HERO -->
   <div class="hero">
@@ -370,7 +440,7 @@
       <div class="feature">
         <div class="feature-icon">⚡</div>
         <h3>MCP Server + SDK</h3>
-        <p>4 on-chain tools via MCP protocol. TypeScript SDK with ElizaOS + LangChain integrations.</p>
+        <p>5 Phase 7 tools via MCP protocol. TypeScript + Python SDKs. ElizaOS + LangChain integrations.</p>
       </div>
     </div>
   </section>
@@ -486,11 +556,11 @@
           <div class="plugin-name">MCP Server</div>
           <div class="plugin-status live">Live</div>
         </div>
-        <p class="plugin-desc">4 on-chain tools via Model Context Protocol. Works with Claude, Cursor, and any MCP-compatible runtime.</p>
+        <p class="plugin-desc">5 Phase 7 tools via Model Context Protocol: audit_action, get_risk_score, check_conformity, report_incident, get_compliance_report. Works with Claude, Cursor, and any MCP runtime.</p>
         <div class="plugin-code">
-          npx @agentauditai/mcp-server<br />
-          <span class="str"># tools: logAction, getAuditLog,</span><br />
-          <span class="str"># verifyProof, getReport</span>
+          npm run mcp<br />
+          <span class="str"># audit_action · get_risk_score</span><br />
+          <span class="str"># check_conformity · report_incident</span>
         </div>
       </div>
       <div class="plugin-card">
@@ -515,11 +585,39 @@
     <h2>Two lines to compliance.</h2>
     <p class="section-sub">
       Open-source core. Drop into any AI agent runtime in minutes.
+      TypeScript and Python SDKs available.
     </p>
-    <div class="code-block">
-      <span class="cmt">// Install</span><br />
-      npm install @agentauditai/sdk<br />
-      <br />
+
+    <!-- Install tabs -->
+    <div class="install-tabs">
+      <div class="install-tab-bar">
+        <button class="install-tab active" onclick="switchInstallTab('npm', this)">npm</button>
+        <button class="install-tab" onclick="switchInstallTab('pip', this)">pip</button>
+      </div>
+
+      <div class="install-panel active" id="install-npm">
+        <div class="install-row">
+          <span id="npm-cmd">npm install @agentauditai/sdk</span>
+          <button class="copy-btn" onclick="copyInstall('npm-cmd', this)">Copy</button>
+        </div>
+        <div class="install-extras">
+          <div class="cmt">// TypeScript / Node.js · v1.0.1 · supports OpenAI, Anthropic, LangChain wrappers</div>
+        </div>
+      </div>
+
+      <div class="install-panel" id="install-pip">
+        <div class="install-row">
+          <span id="pip-cmd">pip install agentauditai-sdk</span>
+          <button class="copy-btn" onclick="copyInstall('pip-cmd', this)">Copy</button>
+        </div>
+        <div class="install-extras">
+          <div class="cmt"># Python · v1.0.0 · async-first, works with any Python AI agent</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TypeScript example -->
+    <div class="code-block" id="sdk-example-npm" style="margin-top:1.5rem">
       <span class="cmt">// Initialize — pick any of 5 networks</span><br />
       <span class="kw">import</span> { AgentAudit } <span class="kw">from</span> <span class="str">'@agentauditai/sdk'</span>;<br />
       <br />
@@ -537,17 +635,43 @@
       <br />
       console.<span class="fn">log</span>(receipt.txHash); <span class="cmt">// EU AI Act Art. 12 ✅</span>
     </div>
+
+    <!-- Python example -->
+    <div class="code-block" id="sdk-example-pip" style="margin-top:1.5rem;display:none">
+      <span class="cmt"># Initialize — pick any of 5 networks</span><br />
+      <span class="kw">from</span> agentauditai <span class="kw">import</span> AgentAudit<br />
+      <br />
+      audit = <span class="fn">AgentAudit</span>(<br />
+      &nbsp;&nbsp;network=<span class="str">"base"</span>,  <span class="cmt"># mantle | base | arbitrum | optimism | polygon</span><br />
+      &nbsp;&nbsp;private_key=os.environ[<span class="str">"AGENT_PRIVATE_KEY"</span>],<br />
+      )<br />
+      <br />
+      <span class="cmt"># Log any action — returns tx_hash on-chain</span><br />
+      receipt = <span class="kw">await</span> audit.<span class="fn">log</span>(<br />
+      &nbsp;&nbsp;action=<span class="str">"TRANSFER_APPROVED"</span>,<br />
+      &nbsp;&nbsp;risk_level=<span class="str">"HIGH"</span>,<br />
+      &nbsp;&nbsp;metadata={<span class="str">"amount"</span>: <span class="str">"100 USDC"</span>, <span class="str">"recipient"</span>: <span class="str">"0x..."</span>},<br />
+      )<br />
+      <br />
+      print(receipt.tx_hash)  <span class="cmt"># EU AI Act Art. 12 ✅</span>
+    </div>
   </section>
 
   <!-- WAVE 1 CTA -->
   <div class="wave1-section" id="wave1">
     <div class="wave1-inner">
       <div class="wave1-badge">⚡ Wave 1 Founding Members — 5 Spots Globally</div>
+
+      <div class="wave1-days-block">
+        <div class="wave1-days" id="wave1DaysCounter">—</div>
+        <div class="wave1-days-label">days remaining · deadline May 31, 2026</div>
+      </div>
+
       <h2 class="wave1-title">$25K value.<br /><span>$0 cost.</span></h2>
       <p class="wave1-sub">
         Get full AgentAudit AI infrastructure — all 5 networks, all contracts,
         SDK + MCP server — completely free as a Founding Member pilot.
-        Aug 2 deadline is not a suggestion.
+        Aug 2 enforcement is not a suggestion.
       </p>
       <div class="wave1-perks">
         <div class="wave1-perk">Full EU AI Act coverage</div>
@@ -556,12 +680,11 @@
         <div class="wave1-perk">Case study featured</div>
         <div class="wave1-perk">No lock-in</div>
       </div>
-      <div class="cta-group" style="justify-content:center">
-        <a href="mailto:hello@getagentaudit.xyz?subject=Wave 1 Founding Member" class="btn-primary">Apply for Free Pilot</a>
+      <div class="cta-group" style="justify-content:center;margin-bottom:1.5rem">
+        <a href="mailto:czenpiotr@gmail.com?subject=Wave 1 Founding Member — AgentAudit AI" class="wave1-btn-large">Apply for Free Pilot</a>
         <a href="https://getagentaudit.xyz/dashboard.html" class="btn-ghost">See Dashboard</a>
       </div>
-      <div class="deadline-counter" id="wave1Deadline"></div>
-      <div class="spots-left">5 spots · 0 cost · May 31, 2026 deadline</div>
+      <div class="spots-left">5 spots · $0 cost · closes May 31, 2026</div>
     </div>
   </div>
 
@@ -623,17 +746,41 @@
       document.getElementById('daysMiCA').textContent = dMiCA > 0 ? dMiCA : 'LIVE';
       document.getElementById('daysAnnex').textContent = dAnnex > 0 ? dAnnex : 'LIVE';
 
-      // Wave 1 deadline
       const dWave1 = daysUntil('2026-05-31');
-      const el = document.getElementById('wave1Deadline');
-      if (el) {
-        el.textContent = dWave1 > 0
-          ? `⏱ ${dWave1} days until Wave 1 closes`
-          : 'Wave 1 closed';
+      const closed = dWave1 <= 0;
+
+      // Big days counter in Wave 1 section
+      const daysEl = document.getElementById('wave1DaysCounter');
+      if (daysEl) daysEl.textContent = closed ? '0' : dWave1;
+
+      // Announcement strip
+      const announceEl = document.getElementById('announceCountdown');
+      if (announceEl) {
+        announceEl.textContent = closed ? 'Wave 1 closed' : `${dWave1} days left`;
       }
     }
 
     updateCountdowns();
+
+    // Install tab switcher
+    function switchInstallTab(tab, btn) {
+      document.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('install-' + tab).classList.add('active');
+      document.getElementById('sdk-example-npm').style.display = tab === 'npm' ? '' : 'none';
+      document.getElementById('sdk-example-pip').style.display = tab === 'pip' ? '' : 'none';
+    }
+
+    // Copy-to-clipboard for install commands
+    function copyInstall(id, btn) {
+      const text = document.getElementById(id).textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+      });
+    }
 
     // Animated log stream — live timestamps
     const actions = [
