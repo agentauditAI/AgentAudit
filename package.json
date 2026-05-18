@@ -7,6 +7,7 @@
     "test": "hardhat test",
     "test:api": "jest",
     "api": "ts-node src/api/server.ts",
+    "mcp": "ts-node src/mcp-server.ts",
     "deploy:mantle-sepolia": "hardhat run scripts/deploy.ts --network mantleSepolia",
     "deploy:arbitrum-sepolia": "hardhat run scripts/deploy.ts --network arbitrumSepolia",
     "deploy:mantle": "hardhat run scripts/deploy.ts --network mantle",
@@ -34,6 +35,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
     "@langchain/core": "^1.1.46",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "ethers": "^6.16.0",
     "express": "^5.2.1",
     "openai": "^6.37.0",
