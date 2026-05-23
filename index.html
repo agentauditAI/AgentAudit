@@ -136,6 +136,9 @@
     .network-addr { font-family: var(--mono); font-size: 0.62rem; color: var(--text-dim); }
     .network-addr a { color: var(--text-dim); text-decoration: none; }
     .network-addr a:hover { color: var(--green); }
+    .network-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.25rem; }
+    .network-logo { display: flex; align-items: center; flex-shrink: 0; }
+    .network-header .network-name { margin-bottom: 0; }
 
     /* ── Sections ── */
     section { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 6rem 2rem; }
@@ -146,7 +149,8 @@
     /* ── Feature grid ── */
     .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5px; background: var(--border); border: 1px solid var(--border); }
     .feature { background: var(--surface); padding: 2rem; }
-    .feature-icon { font-size: 1.5rem; margin-bottom: 1rem; }
+    .feature-icon { display: flex; align-items: center; margin-bottom: 1rem; color: var(--green); }
+    .feature-icon svg { display: block; }
     .feature h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; letter-spacing: -0.01em; }
     .feature p { font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim); line-height: 1.6; }
 
@@ -157,7 +161,7 @@
     .compliance-table td:first-child { color: var(--green); white-space: nowrap; }
     .compliance-table tr:last-child td { border-bottom: none; }
     .tag-live { font-size: 0.62rem; background: var(--green-glow); color: var(--green); border: 1px solid rgba(0,255,136,0.3); padding: 0.1rem 0.4rem; letter-spacing: 0.08em; margin-left: 0.4rem; vertical-align: middle; }
-    .tag-ph7 { font-size: 0.62rem; background: rgba(255,184,0,0.1); color: var(--amber); border: 1px solid rgba(255,184,0,0.3); padding: 0.1rem 0.4rem; letter-spacing: 0.08em; margin-left: 0.4rem; vertical-align: middle; }
+    .tag-ph7 { font-size: 0.62rem; background: rgba(255,184,0,0.12); color: var(--amber); border: 1px solid rgba(255,184,0,0.3); padding: 0.1rem 0.4rem; letter-spacing: 0.08em; margin-left: 0.4rem; vertical-align: middle; }
 
     /* ── Plugins ── */
     .plugins-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5px; background: var(--border); border: 1px solid var(--border); margin-top: 2rem; }
@@ -376,27 +380,42 @@
   <div class="networks-strip">
     <div class="networks-inner">
       <div class="network-item">
-        <div class="network-name">Mantle</div>
+        <div class="network-header">
+          <div class="network-logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 18L8 5L12 13.5L16 5L21 18" stroke="#00D8D0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="network-name">Mantle</div>
+        </div>
         <div class="network-status">Live</div>
         <div class="network-addr"><a href="https://explorer.mantle.xyz/address/0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b" target="_blank">0xD008...054b ↗</a></div>
       </div>
       <div class="network-item">
-        <div class="network-name">Base</div>
+        <div class="network-header">
+          <div class="network-logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#0052FF"/><path d="M9 6.5v11M9 12h4a3.5 3.5 0 010 7H9" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="network-name">Base</div>
+        </div>
         <div class="network-status">Live</div>
         <div class="network-addr"><a href="https://basescan.org/address/0x556C4275EE68869C6874C343d0Cb7Fc3C8910873" target="_blank">0x556C...873 ↗</a></div>
       </div>
       <div class="network-item">
-        <div class="network-name">Arbitrum One</div>
+        <div class="network-header">
+          <div class="network-logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#1B2A3B"/><path d="M7.5 19.5L12 9l4.5 10.5M9.75 15.5h4.5" stroke="#28A0F0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="network-name">Arbitrum One</div>
+        </div>
         <div class="network-status">Live</div>
         <div class="network-addr"><a href="https://arbiscan.io/address/0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" target="_blank">0x3057...450C ↗</a></div>
       </div>
       <div class="network-item">
-        <div class="network-name">Optimism</div>
+        <div class="network-header">
+          <div class="network-logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#FF0420"/><circle cx="12" cy="12" r="4.5" fill="white"/></svg></div>
+          <div class="network-name">Optimism</div>
+        </div>
         <div class="network-status">Live</div>
         <div class="network-addr"><a href="https://optimistic.etherscan.io/address/0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" target="_blank">0x3057...450C ↗</a></div>
       </div>
       <div class="network-item">
-        <div class="network-name">Polygon</div>
+        <div class="network-header">
+          <div class="network-logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 2L21 7v10L12 22 3 17V7z" stroke="#8247E5" stroke-width="2" stroke-linejoin="round"/><path d="M9 10L12 8l3 2v4l-3 2-3-2v-4z" fill="#8247E5"/></svg></div>
+          <div class="network-name">Polygon</div>
+        </div>
         <div class="network-status">Live</div>
         <div class="network-addr"><a href="https://polygonscan.com/address/0x6fC00423Df95a7caf6fFFDD93169b5C01480de02" target="_blank">0x6fC0...de02 ↗</a></div>
       </div>
@@ -413,32 +432,32 @@
     </p>
     <div class="features">
       <div class="feature">
-        <div class="feature-icon">🔗</div>
+        <div class="feature-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
         <h3>Immutable Storage</h3>
         <p>Every action written to the blockchain. No admin key. No delete function. No exceptions. 5 networks, one SDK.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">🔐</div>
+        <div class="feature-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></div>
         <h3>ZK-Proof Layer</h3>
         <p>ZKAuditProof.sol — prove compliance without revealing sensitive data. 169 tests passing. Regulator-ready.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">🇪🇺</div>
+        <div class="feature-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></div>
         <h3>EU AI Act Native</h3>
         <p>Satisfies Articles 9, 11, 12, 13, 14, 19, 26, 72, 73. Legal co-founder with EU AI Act expertise.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">🤖</div>
+        <div class="feature-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/><rect x="5" y="5" width="14" height="14" rx="2"/></svg></div>
         <h3>ERC-8004 Standard</h3>
         <p>Full implementation of Trustless Agents standard. Only EU AI Act-aware ERC-8004 reference implementation.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">📋</div>
+        <div class="feature-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><polyline points="9 15 11 13 13 15 15 11"/></svg></div>
         <h3>Auto-Generated Reports</h3>
         <p>EUAIActReporter.sol generates audit-ready compliance reports automatically. 127 tests passing.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">⚡</div>
+        <div class="feature-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
         <h3>MCP Server + SDK</h3>
         <p>5 Phase 7 tools via MCP protocol. TypeScript + Python SDKs. ElizaOS + LangChain integrations.</p>
       </div>
