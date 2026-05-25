@@ -16,7 +16,8 @@
     "deploy:phase7:base": "hardhat run scripts/deploy_phase7.ts --network base",
     "deploy:phase7:arbitrum": "hardhat run scripts/deploy_phase7.ts --network arbitrumOne",
     "deploy:phase7:optimism": "hardhat run scripts/deploy_phase7.ts --network optimism",
-    "deploy:phase7:polygon": "hardhat run scripts/deploy_phase7.ts --network polygon"
+    "deploy:phase7:polygon": "hardhat run scripts/deploy_phase7.ts --network polygon",
+    "deploy:auditvault:robinhood-testnet": "hardhat run scripts/deploy_auditvault.ts --network robinhoodTestnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
