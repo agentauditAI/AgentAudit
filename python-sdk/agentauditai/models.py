@@ -1,51 +1,72 @@
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class AgentRegistration:
-    agent_id: str
-    name: str
-    model: str
+Severity = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+HarmType = Literal[
+    "DEATH",
+    "SERIOUS_HEALTH_HARM",
+    "SIGNIFICANT_PROPERTY_DAMAGE",
+    "FUNDAMENTAL_RIGHTS_VIOLATION",
+    "OTHER",
+]
+
+
+class AgentRegistration(BaseModel):
+    agent_address: str
+    agent_type: str
+    framework: str
     network: str
-    audit_id: Optional[str] = None
-    tx_hash: Optional[str] = None
-    registered_at: Optional[str] = None
-    articles: List[str] = field(default_factory=list)
+    tx_hash: str
+    articles: List[str] = Field(
+        default=["Art. 13", "Art. 26"],
+        description="EU AI Act articles covered by this registration",
+    )
 
 
-@dataclass
-class AuditAction:
-    audit_id: str
-    agent_id: str
-    action: str
+class AuditAction(BaseModel):
+    agent_address: str
     tx_hash: str
     network: str
-    articles: List[str]
-    timestamp: str
+    content_uri: str
+    merkle_root: str
+    articles: List[str] = Field(default=["Art. 12", "Art. 19"])
 
 
-@dataclass
-class RiskScore:
-    agent_id: str
+class RiskScore(BaseModel):
+    agent_address: str
     network: str
-    level: str
-    score: float
-    articles: List[str]
+    raw_score: int = Field(ge=0, le=255, description="On-chain compliance score (0–255)")
+    score: float = Field(ge=0.0, le=1.0, description="Normalised score (0.0–1.0)")
+    level: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
     compliance_status: str
+    articles: List[str] = Field(default=["Art. 9"])
 
 
-@dataclass
-class ComplianceReport:
-    agent_id: str
+class ComplianceReport(BaseModel):
+    agent_address: str
     network: str
-    generated_at: str
-    agent_name: str
-    compliance_level: str
-    active: bool
-    total_actions_logged: int
-    first_action: Optional[str]
-    last_action: Optional[str]
+    registered: bool
+    agent_type: str
+    framework: str
+    registered_at: int
+    total_events: int
+    batch_count: int
+    compliance_score: int
+    compliance_status: str
     applicable_articles: List[str]
-    compliance_status: str
     obligations: List[Dict[str, Any]]
+
+
+class IncidentReport(BaseModel):
+    incident_id: int
+    agent_address: str
+    network: str
+    tx_hash: str
+    severity: Severity
+    harm_type: HarmType
+    description: str
+    articles: List[str] = Field(default=["Art. 73"])
