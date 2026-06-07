@@ -1,0 +1,9 @@
+{
+  "network": "base",
+  "chainId": "8453",
+  "deployedAt": "2026-06-07T16:52:34.201Z",
+  "deployer": "0x218514Db9048AB350fA61Ef891ee20947c5Bbf8F",
+  "contracts": {
+    "AuditVault": "0xCeE831070aa9081422f30df5559c125aa47A75DB"
+  }
+}
