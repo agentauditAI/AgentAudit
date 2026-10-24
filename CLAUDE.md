@@ -100,17 +100,18 @@ When adding features, note the relevant article in NatSpec.
 ## SDK Wrappers (`sdk/src/`)
 
 All three wrappers share the same principles:
+- **Batch anchoring by default** — `mode: "batch"` (default) buffers one `action_ref` per call in a `BatchBuffer` (`sdk/src/batch.ts`) and anchors a Merkle root via AuditVault v2 `commitBatch` (flush at 50 entries / 60 s / `flush()`); `mode: "per_action"` keeps the legacy `logAction` call. Scope format `llm_call:<model>:record_hash:<sha256(JCS(record))>` — see `docs/EVIDENCE_SCHEMA.md`
 - **Hashed payloads** — `prompt_hash` and `response_hash` are `sha256:` digests; raw content never touches the chain (see `docs/payload-best-practices.md`)
 - **`actionType`** is always `"LLM_DECISION"`
 - **`riskLevel`** defaults to `"HIGH"` if omitted
-- Tests in `test/sdk/*.test.ts` — AgentAudit SDK and LLM clients are fully mocked; no real network or API calls
+- Tests in `test/sdk/*.test.ts` — AgentAudit SDK and LLM clients are fully mocked; no real network or API calls. Exception: `test/sdk/batch.anvil.test.ts` spawns a local `anvil` and deploys AuditVault v2 from `out/` (needs Foundry + `forge build`; fails if `anvil` is missing unless `AGENTAUDIT_SKIP_ANVIL=1` is set)
 - **ts-jest `diagnostics: false`** is set in `jest.config.ts` because ethers v6 uses `#privateField` syntax in `.d.ts` files that trips ts-jest type-checking; root `tsconfig.json` still enforces types at build time
 
 ### `sdk/src/openai.ts` — `AuditedOpenAI`
 
 Drop-in replacement for the `OpenAI` client. Wraps `chat.completions.create`.
 
-- **Non-streaming**: awaits audit before returning; throws if audit fails
+- **Non-streaming**: awaits audit before returning (batch mode: buffering, plus the flush if this entry fills the batch); throws if audit fails
 - **Streaming**: returns `AsyncIterable<ChatCompletionChunk>` via passthrough async generator; logs in `finally` block (fire-and-forget, errors go to `console.error`)
 
 ### `sdk/src/anthropic.ts` — `AuditedAnthropic`

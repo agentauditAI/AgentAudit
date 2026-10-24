@@ -4,6 +4,9 @@
 // Networks: Mantle, Base, Arbitrum One, Optimism, Polygon
 
 import { ethers } from "ethers";
+import type { BatchCommitter, CommitBatchParams, CommitBatchResult } from "./batch";
+
+export * from "./batch";
 
 // ─── Network Config ───────────────────────────────────────────────────────────
 
@@ -12,13 +15,15 @@ export const NETWORKS = {
     rpc:        "https://rpc.mantle.xyz",
     chainId:    5000,
     auditVault: "0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b",
+    vaultVersion: 1,
     explorer:   "https://explorer.mantle.xyz",
     name:       "Mantle Mainnet",
   },
   base: {
     rpc:        "https://mainnet.base.org",
     chainId:    8453,
-    auditVault: "0x556C4275EE68869C6874C343d0Cb7Fc3C8910873",
+    auditVault: "0xCeE831070aa9081422f30df5559c125aa47A75DB",
+    vaultVersion: 2,
     explorer:   "https://basescan.org",
     name:       "Base Mainnet",
   },
@@ -26,6 +31,7 @@ export const NETWORKS = {
     rpc:        "https://arb1.arbitrum.io/rpc",
     chainId:    42161,
     auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C",
+    vaultVersion: 2,
     explorer:   "https://arbiscan.io",
     name:       "Arbitrum One",
   },
@@ -33,6 +39,7 @@ export const NETWORKS = {
     rpc:        "https://mainnet.optimism.io",
     chainId:    10,
     auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C",
+    vaultVersion: 2,
     explorer:   "https://optimistic.etherscan.io",
     name:       "Optimism Mainnet",
   },
@@ -40,6 +47,7 @@ export const NETWORKS = {
     rpc:        "https://polygon-rpc.com",
     chainId:    137,
     auditVault: "0x6fC00423Df95a7caf6fFFDD93169b5C01480de02",
+    vaultVersion: 2,
     explorer:   "https://polygonscan.com",
     name:       "Polygon Mainnet",
   },
@@ -53,6 +61,14 @@ const AUDIT_VAULT_ABI = [
   "function logAction(uint256 agentId, string actionType, bytes32 payloadHash, uint8 riskLevel) external returns (uint256 logIndex)",
   "function logActionBatch(uint256 agentId, string[] actionTypes, bytes32[] payloadHashes, uint8[] riskLevels) external returns (uint256[] logIndexes)",
   "function getLogCount(uint256 agentId) external view returns (uint256)",
+];
+
+// AuditVault v2 (contracts/v2/AuditVault.sol) — Merkle batch anchoring
+const AUDIT_VAULT_V2_ABI = [
+  "function commitBatch(address agentId, bytes32 merkleRoot, string contentURI, uint256 eventCount, uint8 complianceScore) external",
+  "function verifyLog(address agentId, uint256 batchIndex, bytes32 logHash, bytes32[] proof) external view returns (bool)",
+  "function getBatchCount(address agentId) external view returns (uint256)",
+  "event LogBatchCommitted(address indexed agentId, uint256 indexed batchIndex, bytes32 merkleRoot, string contentURI, uint256 eventCount, uint8 complianceScore, uint256 timestamp)",
 ];
 
 const AGENT_REGISTRATION_ABI = [
@@ -92,6 +108,8 @@ export interface AgentAuditConfig {
   network?: NetworkName;
   /** Override RPC URL */
   rpcUrl?: string;
+  /** Override the AuditVault v2 address used by commitBatch / verifyLog */
+  auditVaultAddress?: string;
   /** AgentRegistration contract address (Mantle primary registry) */
   registrationAddress?: string;
   /** IncidentRegistry contract address (Art. 73) */
@@ -128,12 +146,13 @@ export interface IncidentResult {
 
 // ─── Main SDK Class ───────────────────────────────────────────────────────────
 
-export class AgentAudit {
+export class AgentAudit implements BatchCommitter {
   private provider: ethers.JsonRpcProvider;
   private wallet: ethers.Wallet;
   private network: typeof NETWORKS[NetworkName];
   private networkName: NetworkName;
   private auditVault: ethers.Contract;
+  private _auditVaultV2?: ethers.Contract;
 
   // Optional Phase 7 contracts
   private _registration?: ethers.Contract;
@@ -148,7 +167,9 @@ export class AgentAudit {
     this.network = NETWORKS[this.networkName];
 
     const rpc = config.rpcUrl ?? this.network.rpc;
-    this.provider = new ethers.JsonRpcProvider(rpc);
+    // cacheTimeout -1: ethers caches identical calls (incl. eth_getTransactionCount)
+    // for 250ms by default, which hands back-to-back commits the same nonce.
+    this.provider = new ethers.JsonRpcProvider(rpc, undefined, { cacheTimeout: -1 });
     this.wallet = new ethers.Wallet(config.privateKey, this.provider);
     this.auditVault = new ethers.Contract(this.network.auditVault, AUDIT_VAULT_ABI, this.wallet);
   }
@@ -162,6 +183,21 @@ export class AgentAudit {
       this._registration = new ethers.Contract(addr, AGENT_REGISTRATION_ABI, this.wallet);
     }
     return this._registration;
+  }
+
+  private get auditVaultV2(): ethers.Contract {
+    if (!this._auditVaultV2) {
+      const addr = this.config.auditVaultAddress
+        ?? (this.network.vaultVersion === 2 ? this.network.auditVault : undefined);
+      if (!addr) {
+        throw new Error(
+          `${this.network.name} AuditVault is v${this.network.vaultVersion} (no commitBatch). ` +
+          "Pass auditVaultAddress for a v2 deployment or use mode: \"per_action\"."
+        );
+      }
+      this._auditVaultV2 = new ethers.Contract(addr, AUDIT_VAULT_V2_ABI, this.wallet);
+    }
+    return this._auditVaultV2;
   }
 
   private get incidentRegistry(): ethers.Contract {
@@ -236,6 +272,13 @@ export class AgentAudit {
   }
 
   /**
+   * Alias for log() — the name the LLM wrappers call in per_action mode
+   */
+  async logAction(params: LogActionParams): Promise<LogActionResult> {
+    return this.log(params);
+  }
+
+  /**
    * Log multiple actions in one transaction (gas efficient)
    */
   async logBatch(
@@ -261,6 +304,41 @@ export class AgentAudit {
    */
   async getLogCount(agentId: number | string): Promise<number> {
     return Number(await this.auditVault.getLogCount(String(agentId)));
+  }
+
+  // ─── Batch Anchoring (AuditVault v2 — Art. 12, 19) ──────────────────────────
+
+  /**
+   * Anchor a Merkle root of action_refs (docs/EVIDENCE_SCHEMA.md) in one tx.
+   * Usually called by BatchBuffer rather than directly.
+   */
+  async commitBatch(params: CommitBatchParams): Promise<CommitBatchResult> {
+    const vault = this.auditVaultV2;
+    const tx = await vault.commitBatch(
+      params.agentAddress,
+      params.merkleRoot,
+      params.contentURI,
+      params.eventCount,
+      params.complianceScore
+    );
+    const receipt = await tx.wait();
+
+    let batchIndex: number | null = null;
+    for (const log of receipt?.logs ?? []) {
+      const parsed = (() => { try { return vault.interface.parseLog(log); } catch { return null; } })();
+      if (parsed?.name === "LogBatchCommitted" && parsed.args.merkleRoot === params.merkleRoot) {
+        batchIndex = Number(parsed.args.batchIndex);
+        break;
+      }
+    }
+    return { txHash: tx.hash, batchIndex };
+  }
+
+  /**
+   * Check an inclusion proof against a committed batch (AuditVault v2 verifyLog)
+   */
+  async verifyLog(agentAddress: string, batchIndex: number, leaf: string, proof: string[]): Promise<boolean> {
+    return this.auditVaultV2.verifyLog(agentAddress, batchIndex, leaf, proof);
   }
 
   // ─── Agent Registration (Art. 13, 26 — KYA Standard) ─────────────────────

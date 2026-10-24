@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import type { Stream } from "openai/streaming";
 import { createHash } from "crypto";
 import { AgentAudit, type AgentAuditConfig } from "./index";
+import { llmDecisionPreimage, resolveBatchBuffer, type AuditMode, type BatchBuffer, type BatchOptions } from "./batch";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,10 @@ export interface AuditedOpenAIConfig {
   riskLevel?: "HIGH" | "MEDIUM" | "LOW";
   /** OpenAI API key — falls back to OPENAI_API_KEY env var if omitted */
   openaiApiKey?: string;
+  /** "batch" (default): anchor via BatchBuffer + commitBatch. "per_action": legacy logAction per call */
+  mode?: AuditMode;
+  /** Batch settings — ignored in per_action mode */
+  batch?: BatchOptions;
 }
 
 // ─── Audit record (safe to log on-chain — contains hashes, never raw data) ──
@@ -55,15 +60,17 @@ export class AuditedOpenAI {
   private readonly sdk: AgentAudit;
   private readonly agentId: number;
   private readonly riskLevel: "HIGH" | "MEDIUM" | "LOW";
+  /** Batch buffer in batch mode (flush / close / getInclusionProof); undefined in per_action mode */
+  readonly buffer?: BatchBuffer;
 
   readonly chat: {
     completions: {
-      /** Non-streaming call — awaits audit before returning; throws if audit fails */
+      /** Non-streaming call — awaits audit before returning (batch mode: buffering, plus the flush if this entry fills the batch); throws if audit fails */
       create(
         body: OpenAI.ChatCompletionCreateParamsNonStreaming,
         options?: OpenAI.RequestOptions
       ): Promise<OpenAI.ChatCompletion>;
-      /** Streaming call — logs on-chain after stream is fully consumed */
+      /** Streaming call — audits after stream is fully consumed (fire-and-forget) */
       create(
         body: OpenAI.ChatCompletionCreateParamsStreaming,
         options?: OpenAI.RequestOptions
@@ -80,6 +87,9 @@ export class AuditedOpenAI {
     this.sdk = new AgentAudit(config.agentAudit);
     this.agentId = config.agentId;
     this.riskLevel = config.riskLevel ?? "HIGH";
+    if ((config.mode ?? "batch") === "batch") {
+      this.buffer = resolveBatchBuffer(this.sdk, config.batch);
+    }
 
     const self = this;
     this.chat = {
@@ -177,6 +187,10 @@ export class AuditedOpenAI {
   // ─── Shared ─────────────────────────────────────────────────────────────────
 
   private async _auditLog(record: AuditRecord): Promise<void> {
+    if (this.buffer) {
+      await this.buffer.add(llmDecisionPreimage(this.agentId, record.model, record), record);
+      return;
+    }
     await this.sdk.logAction({
       agentId: this.agentId,
       actionType: "LLM_DECISION",

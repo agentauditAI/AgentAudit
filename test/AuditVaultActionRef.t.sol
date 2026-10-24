@@ -207,6 +207,42 @@ contract AuditVaultActionRefTest is Test {
             "action_ref must be stable regardless of post-issuance revocation status");
     }
 
+    // ─── SDK cross-check (sdk/src/batch.ts) ───────────────────────────────────
+
+    /// @notice Root and proofs below were produced by the TypeScript SDK
+    ///         (buildMerkleLevels / merkleProof) for leaves [0001..0004, schema
+    ///         example]. Five leaves exercise odd-node promotion: the unpaired
+    ///         fifth leaf is carried up unchanged, so its proof is one element.
+    function test_actionRef_sdkOddTree_rootAndProofsVerify() public {
+        bytes32 sdkRoot = 0xb240f9c87584f2183d5e309c599faed6f1249ac914636e9d51e85af39d7f275c;
+        bytes32 node0123 = 0x22306f14b959c2f1fbd0c061c58a51bdfab03f6ceb4e9d820d817127ef65e207;
+        bytes32 node01   = 0x27223ccb7792ba43771e00c950d7335d7a286cbb492b5c536e3b51bf3d48df18;
+        bytes32 node23   = 0x9f542fa1972fa00b1f2ef5536dfdddbf423c4b9c8340c1dcaba8ff47432893e4;
+
+        (bytes32 root4, bytes32 n01, bytes32 n23) = _buildTree();
+        assertEq(node0123, root4, "SDK 4-leaf subtree != Solidity _buildTree root");
+        assertEq(node01, n01, "SDK node01 mismatch");
+        assertEq(node23, n23, "SDK node23 mismatch");
+        assertEq(_hashPair(node0123, ACTION_REF_SCHEMA_EXAMPLE), sdkRoot, "SDK root mismatch");
+
+        vm.prank(submitter);
+        vault.commitBatch(agent, sdkRoot, "ipfs://action-ref-v0-sdk-batch", 5, 95);
+
+        bytes32[] memory p = new bytes32[](3);
+        p[0] = ACTION_REF_0002; p[1] = node23; p[2] = ACTION_REF_SCHEMA_EXAMPLE;
+        assertTrue(vault.verifyLog(agent, 0, ACTION_REF_0001, p), "0001 sdk proof fail");
+        p[0] = ACTION_REF_0001;
+        assertTrue(vault.verifyLog(agent, 0, ACTION_REF_0002, p), "0002 sdk proof fail");
+        p[0] = ACTION_REF_0004; p[1] = node01;
+        assertTrue(vault.verifyLog(agent, 0, ACTION_REF_0003, p), "0003 sdk proof fail");
+        p[0] = ACTION_REF_0003;
+        assertTrue(vault.verifyLog(agent, 0, ACTION_REF_0004, p), "0004 sdk proof fail");
+
+        bytes32[] memory promoted = new bytes32[](1);
+        promoted[0] = node0123;
+        assertTrue(vault.verifyLog(agent, 0, ACTION_REF_SCHEMA_EXAMPLE, promoted), "promoted leaf proof fail");
+    }
+
     // ─── Gap documentation (non-reverting assertions) ─────────────────────────
 
     /// @notice Documents the three structural gaps between the JCS receipt

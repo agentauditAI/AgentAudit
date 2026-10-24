@@ -1,11 +1,18 @@
+import { BatchBuffer, MemoryBatchStore, canonicalize, sha256Hex } from "../../sdk/src/batch";
 import { AuditedAnthropic, AuditRecord } from "../../sdk/src/anthropic";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
+const MOCK_SIGNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const mockLogAction = jest.fn().mockResolvedValue({ txHash: "0xdeadbeef" });
+const mockCommitBatch = jest.fn().mockResolvedValue({ txHash: "0xbatch", batchIndex: 0 });
 
 jest.mock("../../sdk/src/index", () => ({
-  AgentAudit: jest.fn().mockImplementation(() => ({ logAction: mockLogAction })),
+  AgentAudit: jest.fn().mockImplementation(() => ({
+    logAction: mockLogAction,
+    commitBatch: mockCommitBatch,
+    getAddress: () => MOCK_SIGNER,
+  })),
 }));
 
 const mockCreate = jest.fn();
@@ -23,6 +30,7 @@ const CONFIG = {
   agentId: 3,
   riskLevel: "HIGH" as const,
   anthropicApiKey: "sk-ant-test",
+  mode: "per_action" as const,
 };
 
 const MESSAGES: { role: "user"; content: string }[] = [
@@ -347,5 +355,60 @@ describe("Streaming create", () => {
       "chain down"
     );
     consoleSpy.mockRestore();
+  });
+});
+
+// ─── Batch mode (default) ─────────────────────────────────────────────────────
+
+describe("Batch mode", () => {
+  const BATCH_CONFIG = { ...CONFIG, mode: undefined };
+  const BODY = { model: "claude-opus-4-7", max_tokens: 100, system: "Be strict.", messages: MESSAGES };
+
+  it("is the default: buffers instead of calling logAction", async () => {
+    mockCreate.mockResolvedValueOnce(MESSAGE_RESPONSE);
+    const client = new AuditedAnthropic(BATCH_CONFIG);
+    await client.messages.create(BODY);
+
+    expect(client.buffer).toBeInstanceOf(BatchBuffer);
+    expect(client.buffer!.size).toBe(1);
+    expect(mockLogAction).not.toHaveBeenCalled();
+  });
+
+  it("per_action mode has no buffer", () => {
+    expect(new AuditedAnthropic(CONFIG).buffer).toBeUndefined();
+  });
+
+  it("flush commits an llm_call scope over the hashed record (system prompt included, never raw)", async () => {
+    mockCreate.mockResolvedValueOnce(MESSAGE_RESPONSE);
+    const store = new MemoryBatchStore();
+    const client = new AuditedAnthropic({ ...BATCH_CONFIG, batch: { store } });
+    await client.messages.create(BODY);
+    const result = (await client.buffer!.flush())!;
+
+    expect(mockCommitBatch).toHaveBeenCalledWith(expect.objectContaining({ agentAddress: MOCK_SIGNER, eventCount: 1 }));
+    const entry = (await store.get(result.batchId))!.entries[0];
+    const record = entry.record as AuditRecord;
+    expect(record.has_system).toBe(true);
+    expect(entry.preimage).toMatchObject({ action_type: "LLM_DECISION", agent_id: "3" });
+    expect(entry.preimage.scope).toBe(`llm_call:claude-opus-4-7:record_hash:${sha256Hex(canonicalize(record))}`);
+    expect(JSON.stringify(entry)).not.toContain("Be strict.");
+    expect(JSON.stringify(entry)).not.toContain("Based on the data");
+  });
+
+  it("non-streaming throws when the flush it triggers fails", async () => {
+    mockCreate.mockResolvedValueOnce(MESSAGE_RESPONSE);
+    mockCommitBatch.mockRejectedValueOnce(new Error("chain error"));
+    const client = new AuditedAnthropic({ ...BATCH_CONFIG, batch: { maxEntries: 1 } });
+    await expect(client.messages.create(BODY)).rejects.toThrow("chain error");
+  });
+
+  it("streaming buffers after the stream is consumed", async () => {
+    mockCreate.mockResolvedValueOnce(asyncEvents([startEvent(), deltaEvent("Yes"), messageDeltaEvent(), stopEvent()]));
+    const client = new AuditedAnthropic(BATCH_CONFIG);
+    const stream = await client.messages.create({ ...BODY, stream: true });
+    for await (const _ of stream) { /* drain */ }
+    await new Promise((r) => setImmediate(r));
+    expect(client.buffer!.size).toBe(1);
+    expect(mockLogAction).not.toHaveBeenCalled();
   });
 });

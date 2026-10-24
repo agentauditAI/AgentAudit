@@ -1,11 +1,18 @@
+import { BatchBuffer, MemoryBatchStore, canonicalize, sha256Hex } from "../../sdk/src/batch";
 import { AuditedOpenAI, AuditRecord } from "../../sdk/src/openai";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
+const MOCK_SIGNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const mockLogAction = jest.fn().mockResolvedValue({ txHash: "0xdeadbeef" });
+const mockCommitBatch = jest.fn().mockResolvedValue({ txHash: "0xbatch", batchIndex: 0 });
 
 jest.mock("../../sdk/src/index", () => ({
-  AgentAudit: jest.fn().mockImplementation(() => ({ logAction: mockLogAction })),
+  AgentAudit: jest.fn().mockImplementation(() => ({
+    logAction: mockLogAction,
+    commitBatch: mockCommitBatch,
+    getAddress: () => MOCK_SIGNER,
+  })),
 }));
 
 const mockCreate = jest.fn();
@@ -23,6 +30,7 @@ const CONFIG = {
   agentId: 7,
   riskLevel: "HIGH" as const,
   openaiApiKey: "sk-test",
+  mode: "per_action" as const,
 };
 
 const MESSAGES: { role: "user"; content: string }[] = [
@@ -296,5 +304,75 @@ describe("Streaming create", () => {
       "chain down"
     );
     consoleSpy.mockRestore();
+  });
+});
+
+// ─── Batch mode (default) ─────────────────────────────────────────────────────
+
+describe("Batch mode", () => {
+  const BATCH_CONFIG = { ...CONFIG, mode: undefined };
+
+  it("is the default: buffers instead of calling logAction", async () => {
+    mockCreate.mockResolvedValueOnce(CHAT_COMPLETION);
+    const client = new AuditedOpenAI(BATCH_CONFIG);
+    await client.chat.completions.create({ model: "gpt-4o", messages: MESSAGES });
+
+    expect(client.buffer).toBeInstanceOf(BatchBuffer);
+    expect(client.buffer!.size).toBe(1);
+    expect(mockLogAction).not.toHaveBeenCalled();
+    expect(mockCommitBatch).not.toHaveBeenCalled();
+  });
+
+  it("per_action mode has no buffer", () => {
+    expect(new AuditedOpenAI(CONFIG).buffer).toBeUndefined();
+  });
+
+  it("flush commits under the signer address with an llm_call scope over the hashed record", async () => {
+    mockCreate.mockResolvedValueOnce(CHAT_COMPLETION);
+    const store = new MemoryBatchStore();
+    const client = new AuditedOpenAI({ ...BATCH_CONFIG, batch: { store } });
+    await client.chat.completions.create({ model: "gpt-4o", messages: MESSAGES });
+    const result = (await client.buffer!.flush())!;
+
+    expect(mockCommitBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ agentAddress: MOCK_SIGNER, eventCount: 1, merkleRoot: result.merkleRoot })
+    );
+    const entry = (await store.get(result.batchId))!.entries[0];
+    const record = entry.record as AuditRecord;
+    expect(entry.preimage).toMatchObject({ action_type: "LLM_DECISION", agent_id: "7" });
+    expect(entry.preimage.scope).toBe(`llm_call:gpt-4o:record_hash:${sha256Hex(canonicalize(record))}`);
+    expect(record.prompt_hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(JSON.stringify(entry)).not.toContain("approve this loan");
+  });
+
+  it("non-streaming throws when the flush it triggers fails", async () => {
+    mockCreate.mockResolvedValueOnce(CHAT_COMPLETION);
+    mockCommitBatch.mockRejectedValueOnce(new Error("chain error"));
+    const client = new AuditedOpenAI({ ...BATCH_CONFIG, batch: { maxEntries: 1 } });
+    await expect(
+      client.chat.completions.create({ model: "gpt-4o", messages: MESSAGES })
+    ).rejects.toThrow("chain error");
+    expect(client.buffer!.size).toBe(1);
+  });
+
+  it("streaming buffers after the stream is consumed", async () => {
+    mockCreate.mockResolvedValueOnce(asyncChunks(makeChunks(["Yes", "."])));
+    const client = new AuditedOpenAI(BATCH_CONFIG);
+    const stream = await client.chat.completions.create({ model: "gpt-4o", messages: MESSAGES, stream: true });
+    for await (const _ of stream) { /* drain */ }
+    await new Promise((r) => setImmediate(r));
+    expect(client.buffer!.size).toBe(1);
+    expect(mockLogAction).not.toHaveBeenCalled();
+  });
+
+  it("several clients can share one buffer", async () => {
+    mockCreate.mockResolvedValue(CHAT_COMPLETION);
+    const buffer = new BatchBuffer({ committer: { commitBatch: mockCommitBatch }, agentAddress: MOCK_SIGNER });
+    const a = new AuditedOpenAI({ ...BATCH_CONFIG, batch: { buffer } });
+    const b = new AuditedOpenAI({ ...BATCH_CONFIG, batch: { buffer } });
+    await a.chat.completions.create({ model: "gpt-4o", messages: MESSAGES });
+    await b.chat.completions.create({ model: "gpt-4o", messages: MESSAGES });
+    expect(a.buffer).toBe(buffer);
+    expect(buffer.size).toBe(2);
   });
 });

@@ -3,6 +3,7 @@ import type { Stream } from "@anthropic-ai/sdk/core/streaming";
 import type { RawMessageStreamEvent } from "@anthropic-ai/sdk/resources/messages/messages";
 import { createHash } from "crypto";
 import { AgentAudit, type AgentAuditConfig } from "./index";
+import { llmDecisionPreimage, resolveBatchBuffer, type AuditMode, type BatchBuffer, type BatchOptions } from "./batch";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,10 @@ export interface AuditedAnthropicConfig {
   riskLevel?: "HIGH" | "MEDIUM" | "LOW";
   /** Anthropic API key — falls back to ANTHROPIC_API_KEY env var if omitted */
   anthropicApiKey?: string;
+  /** "batch" (default): anchor via BatchBuffer + commitBatch. "per_action": legacy logAction per call */
+  mode?: AuditMode;
+  /** Batch settings — ignored in per_action mode */
+  batch?: BatchOptions;
 }
 
 // ─── Audit record (safe to log on-chain — hashes only, no raw content) ───────
@@ -64,14 +69,16 @@ export class AuditedAnthropic {
   private readonly sdk: AgentAudit;
   private readonly agentId: number;
   private readonly riskLevel: "HIGH" | "MEDIUM" | "LOW";
+  /** Batch buffer in batch mode (flush / close / getInclusionProof); undefined in per_action mode */
+  readonly buffer?: BatchBuffer;
 
   readonly messages: {
-    /** Non-streaming call — awaits audit before returning; throws if audit fails */
+    /** Non-streaming call — awaits audit before returning (batch mode: buffering, plus the flush if this entry fills the batch); throws if audit fails */
     create(
       body: Anthropic.MessageCreateParamsNonStreaming,
       options?: Anthropic.RequestOptions
     ): Promise<Anthropic.Message>;
-    /** Streaming call — logs on-chain after stream is fully consumed */
+    /** Streaming call — audits after stream is fully consumed (fire-and-forget) */
     create(
       body: Anthropic.MessageCreateParamsStreaming,
       options?: Anthropic.RequestOptions
@@ -87,6 +94,9 @@ export class AuditedAnthropic {
     this.sdk = new AgentAudit(config.agentAudit);
     this.agentId = config.agentId;
     this.riskLevel = config.riskLevel ?? "HIGH";
+    if ((config.mode ?? "batch") === "batch") {
+      this.buffer = resolveBatchBuffer(this.sdk, config.batch);
+    }
 
     const self = this;
     this.messages = {
@@ -188,6 +198,10 @@ export class AuditedAnthropic {
   // ─── Shared ─────────────────────────────────────────────────────────────────
 
   private async _auditLog(record: AuditRecord): Promise<void> {
+    if (this.buffer) {
+      await this.buffer.add(llmDecisionPreimage(this.agentId, record.model, record), record);
+      return;
+    }
     await this.sdk.logAction({
       agentId: this.agentId,
       actionType: "LLM_DECISION",

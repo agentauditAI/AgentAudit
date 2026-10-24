@@ -34,6 +34,36 @@ This document identifies key threats to AI agent security and explains how Agent
 **Threat:** AI agent operates without meeting EU AI Act obligations.
 **Mitigation:** Full KYA registration + AuditVault logging satisfies Articles 9, 12, 13, 19, 26, 72.
 
+## Known issues — AuditVault v2
+
+`contracts/v2/AuditVault.sol` is deployed and is not being changed. Both issues
+below are therefore handled by the verifier, not by the contract.
+
+### KI-1. `commitBatch` has no access control
+**Issue:** `commitBatch` (and `commitHighRiskEvent`) accept any caller and do
+not check that `agentId` is registered. Anyone can append batches under any
+agent address, including roots that do not correspond to real agent activity.
+**Impact:** A batch existing under an agent address does not prove the agent's
+operator committed it. Batch counts and `getLatestComplianceScore` can be
+inflated or polluted by third parties.
+**Verifier mitigation:** Read `LogBatch.submitter` (from `getBatch`) and accept
+the batch only if the submitter is an address authorized for that agent (the
+operator / SDK signer recorded at registration). Ignore batches from any other
+submitter.
+
+### KI-2. Internal Merkle node accepted as a leaf
+**Issue:** `verifyLog` hashes leaves and internal nodes identically
+(`keccak256` of the sorted pair, no domain separation) and does not hash the
+leaf itself. Any internal node of a committed tree, presented with the shorter
+proof above it, also returns `true`.
+**Impact:** `verifyLog(...) == true` alone does not prove the presented
+`bytes32` is a real `action_ref`.
+**Verifier mitigation:** Never trust the leaf value. Obtain the preimage from
+the batch payload behind `contentURI` and recompute
+`action_ref = SHA-256(JCS(preimage))` (docs/EVIDENCE_SCHEMA.md) yourself; only
+then call `verifyLog` with that recomputed value. An internal node has no
+valid JSON preimage, so it cannot pass this check.
+
 ## Out of Scope
 
 - Runtime execution environment security (OS, container)

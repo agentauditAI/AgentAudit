@@ -4,6 +4,7 @@ import type { BaseMessage } from "@langchain/core/messages";
 import type { LLMResult } from "@langchain/core/outputs";
 import { createHash } from "crypto";
 import { AgentAudit, type AgentAuditConfig } from "./index";
+import { llmDecisionPreimage, resolveBatchBuffer, type AuditMode, type BatchBuffer, type BatchOptions } from "./batch";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,10 @@ export interface AgentAuditCallbackConfig {
   agentId: number;
   /** EU AI Act risk classification — determines which articles are triggered */
   riskLevel?: "HIGH" | "MEDIUM" | "LOW";
+  /** "batch" (default): anchor via BatchBuffer + commitBatch. "per_action": legacy logAction per call */
+  mode?: AuditMode;
+  /** Batch settings — ignored in per_action mode */
+  batch?: BatchOptions;
 }
 
 // ─── Audit record (safe to log on-chain — hashes only, no raw content) ───────
@@ -95,6 +100,8 @@ export class AgentAuditCallbackHandler extends BaseCallbackHandler {
   private readonly sdk: AgentAudit;
   private readonly agentId: number;
   private readonly riskLevel: "HIGH" | "MEDIUM" | "LOW";
+  /** Batch buffer in batch mode (flush / close / getInclusionProof); undefined in per_action mode */
+  readonly buffer?: BatchBuffer;
   // Keyed by runId — supports concurrent calls
   private readonly _runs = new Map<string, RunState>();
 
@@ -103,6 +110,9 @@ export class AgentAuditCallbackHandler extends BaseCallbackHandler {
     this.sdk = new AgentAudit(config.agentAudit);
     this.agentId = config.agentId;
     this.riskLevel = config.riskLevel ?? "HIGH";
+    if ((config.mode ?? "batch") === "batch") {
+      this.buffer = resolveBatchBuffer(this.sdk, config.batch);
+    }
   }
 
   // ─── Chat model start (primary path for modern LangChain usage) ─────────────
@@ -167,6 +177,10 @@ export class AgentAuditCallbackHandler extends BaseCallbackHandler {
   // ─── Shared ─────────────────────────────────────────────────────────────────
 
   private async _auditLog(record: AuditRecord): Promise<void> {
+    if (this.buffer) {
+      await this.buffer.add(llmDecisionPreimage(this.agentId, record.model, record), record);
+      return;
+    }
     await this.sdk.logAction({
       agentId: this.agentId,
       actionType: "LLM_DECISION",

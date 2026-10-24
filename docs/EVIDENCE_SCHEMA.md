@@ -96,15 +96,42 @@ data_read:<endpoint>:<dataset_version>:<result_hash>
 
 Example: `data_read:/v1/prices:2026-10-01:9a7f…02bc`
 
-Segments must not contain `:`; percent-encode it (`%3A`) if an endpoint or
-version identifier needs one.
+### 2.3 LLM call
+
+```
+llm_call:<model>:record_hash:<sha256>
+```
+
+| Segment | Meaning |
+|---|---|
+| `<model>` | Model identifier reported by the provider (e.g. `gpt-4o`, `claude-opus-4-7`) |
+| `<sha256>` | SHA-256 of the JCS-canonicalized audit record |
+
+The audit record is the hashed-payload object the SDK wrappers build
+(`prompt_hash`, `response_hash`, token counts, latency, risk level — never raw
+prompt or response text). It is stored next to the preimage in the batch
+payload so `record_hash` can be recomputed. SDK preimages for LLM calls use
+`action_type: "LLM_DECISION"`.
+
+Example: `llm_call:gpt-4o:record_hash:5d1e…a07c`
+
+### 2.4 Segment encoding
+
+Segments must not contain `:`. Percent-encode `%` as `%25` first, then `:` as
+`%3A` (e.g. model `bedrock:claude%v1` → `bedrock%3Aclaude%25v1`). Hash segments
+never need encoding.
 
 ---
 
 ## 3. On-chain anchoring
 
 1. Off-chain: compute `action_ref` for each action.
-2. Off-chain: build a sorted-pair `keccak256` Merkle tree over the `action_ref` leaves.
+2. Off-chain: build a sorted-pair `keccak256` Merkle tree over the `action_ref` leaves:
+   - leaves are the `action_ref` values themselves, in insertion order — not re-hashed;
+   - each parent is `keccak256(abi.encodePacked(min(a, b), max(a, b)))`;
+   - an unpaired last node is promoted unchanged to the next level (no
+     duplication), so its proof skips that level;
+   - a single-leaf tree has root == leaf and an empty proof.
 3. On-chain: `AuditVault.commitBatch(agent, merkleRoot, contentURI, eventCount, complianceScore)`.
    A single high-risk action may be anchored alone with
    `commitHighRiskEvent(agent, action_ref, contentURI)` (leaf == root).
@@ -113,6 +140,34 @@ version identifier needs one.
 Leaves are SHA-256, internal nodes are keccak256. `verifyLog` is agnostic to
 the leaf algorithm; the off-chain payload behind `contentURI` must state the
 schema version (`agentaudit-evidence-v1`) so auditors can re-derive proofs.
+
+Verifiers must apply the mitigations in `docs/THREAT_MODEL.md` → "Known issues —
+AuditVault v2": check `LogBatch.submitter`, and always recompute `action_ref`
+from the preimage instead of trusting a presented leaf.
+
+### 3.1 Batch payload
+
+The SDK (`sdk/src/batch.ts`, `BatchBuffer`) stores one JSON document per batch
+and anchors its location as `contentURI`:
+
+```json
+{
+  "schema": "agentaudit-evidence-v1",
+  "batch_id": "0x<merkle root>",
+  "agent_address": "0x<agent address passed to commitBatch>",
+  "merkle_root": "0x<merkle root>",
+  "leaf_hash": "sha256(jcs(preimage))",
+  "node_hash": "keccak256(sorted_pair)",
+  "odd_node": "promote",
+  "created_at_ms": 1761264000000,
+  "entries": [
+    { "action_ref": "0x…", "preimage": { "action_type": "…", "agent_id": "…", "scope": "…", "timestamp_ms": 0 }, "record": { } }
+  ]
+}
+```
+
+`entries` are in leaf order. `record` is optional and holds only hashed audit
+data (§2.3).
 
 ---
 

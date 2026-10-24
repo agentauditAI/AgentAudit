@@ -1,11 +1,18 @@
+import { BatchBuffer, MemoryBatchStore, canonicalize, sha256Hex } from "../../sdk/src/batch";
 import { AgentAuditCallbackHandler, AuditRecord } from "../../sdk/src/langchain";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
+const MOCK_SIGNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const mockLogAction = jest.fn().mockResolvedValue({ txHash: "0xdeadbeef" });
+const mockCommitBatch = jest.fn().mockResolvedValue({ txHash: "0xbatch", batchIndex: 0 });
 
 jest.mock("../../sdk/src/index", () => ({
-  AgentAudit: jest.fn().mockImplementation(() => ({ logAction: mockLogAction })),
+  AgentAudit: jest.fn().mockImplementation(() => ({
+    logAction: mockLogAction,
+    commitBatch: mockCommitBatch,
+    getAddress: () => MOCK_SIGNER,
+  })),
 }));
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -14,6 +21,7 @@ const CONFIG = {
   agentAudit: { privateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" },
   agentId: 5,
   riskLevel: "HIGH" as const,
+  mode: "per_action" as const,
 };
 
 const RUN_ID = "run-abc-123";
@@ -319,5 +327,52 @@ describe("Hash determinism", () => {
     const h1 = JSON.parse(mockLogAction.mock.calls[0][0].payload).prompt_hash;
     const h2 = JSON.parse(mockLogAction.mock.calls[1][0].payload).prompt_hash;
     expect(h1).not.toBe(h2);
+  });
+});
+
+// ─── Batch mode (default) ─────────────────────────────────────────────────────
+
+describe("Batch mode", () => {
+  const BATCH_CONFIG = { ...CONFIG, mode: undefined };
+
+  it("is the default: handleLLMEnd buffers instead of calling logAction", async () => {
+    const handler = new AgentAuditCallbackHandler(BATCH_CONFIG);
+    await handler.handleChatModelStart(CHAT_OPENAI_SERIALIZED as any, [[USER_MSG as any]], RUN_ID);
+    await handler.handleLLMEnd(llmResult("Yes.", OPENAI_LLM_OUTPUT) as any, RUN_ID);
+    await new Promise((r) => setImmediate(r));
+
+    expect(handler.buffer).toBeInstanceOf(BatchBuffer);
+    expect(handler.buffer!.size).toBe(1);
+    expect(mockLogAction).not.toHaveBeenCalled();
+  });
+
+  it("per_action mode has no buffer", () => {
+    expect(new AgentAuditCallbackHandler(CONFIG).buffer).toBeUndefined();
+  });
+
+  it("flush commits an llm_call scope over the hashed record", async () => {
+    const store = new MemoryBatchStore();
+    const handler = new AgentAuditCallbackHandler({ ...BATCH_CONFIG, batch: { store } });
+    await handler.handleChatModelStart(CHAT_ANTHROPIC_SERIALIZED as any, [[USER_MSG as any]], RUN_ID);
+    await handler.handleLLMEnd(llmResult("Yes, it is.", ANTHROPIC_LLM_OUTPUT) as any, RUN_ID);
+    await new Promise((r) => setImmediate(r));
+    const result = (await handler.buffer!.flush())!;
+
+    expect(mockCommitBatch).toHaveBeenCalledWith(expect.objectContaining({ agentAddress: MOCK_SIGNER, eventCount: 1 }));
+    const entry = (await store.get(result.batchId))!.entries[0];
+    expect(entry.preimage).toMatchObject({ action_type: "LLM_DECISION", agent_id: "5" });
+    expect(entry.preimage.scope).toBe(`llm_call:claude-opus-4-7:record_hash:${sha256Hex(canonicalize(entry.record!))}`);
+    expect(JSON.stringify(entry)).not.toContain("Is this compliant?");
+  });
+
+  it("flush failures from the fire-and-forget path go to console.error, not the caller", async () => {
+    mockCommitBatch.mockRejectedValueOnce(new Error("chain error"));
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const handler = new AgentAuditCallbackHandler({ ...BATCH_CONFIG, batch: { maxEntries: 1 } });
+    await handler.handleChatModelStart(CHAT_OPENAI_SERIALIZED as any, [[USER_MSG as any]], RUN_ID);
+    await expect(handler.handleLLMEnd(llmResult("Yes.") as any, RUN_ID)).resolves.toBeUndefined();
+    await new Promise((r) => setImmediate(r));
+    expect(spy).toHaveBeenCalledWith("[AgentAuditCallbackHandler] audit log failed:", "chain error");
+    spy.mockRestore();
   });
 });
