@@ -40,7 +40,7 @@ and integration partners can navigate end-to-end.
 - Rewriting the SDK from scratch
 - Migrating the Mantle Mainnet contract (v1 stays deployed as historical record)
 - Building a "combined" product with enforcement layer — positioning is
-  "on-chain evidence layer, complementary to enforcement tools like Nobulex"
+  "on-chain evidence layer, complementary to enforcement tools"
 
 ---
 
@@ -106,7 +106,7 @@ Tasks:
 
 - [ ] Split existing KYA documentation into four separate documents
 - [ ] Rewrite README.md with clear positioning and architecture diagram
-- [ ] Add compatibility note for Nobulex integration
+- [x] Publish evidence schema (action_ref / JCS compatibility) — see `docs/EVIDENCE_SCHEMA.md`
 - [ ] Document contract addresses per network
 - [ ] Update GitHub button link in `index.html`
 
@@ -135,7 +135,6 @@ Tasks:
 - [ ] Deploy v2 to Mantle Mainnet
 - [ ] Announce migration (tweet + Mirror post)
 - [ ] Update grant statuses (NGI Zero, Giveth)
-- [ ] Outreach to Nobulex (complementary partnership)
 - [ ] First pilot integration (ElizaOS or LangChain agent)
 
 ---
@@ -166,6 +165,5 @@ Tasks:
 
 - NGI Zero submission code: `2026-06-098`
 - Mantle Mainnet AuditVault v1: `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b`
-- Nobulex (complementary project): https://github.com/arian-gogani/nobulex
 - EAS documentation: https://docs.attest.org
 - Target legal framework: EU AI Act (Regulation 2024/1689), enforcement August 2, 2026

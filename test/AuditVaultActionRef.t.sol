@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title AuditVault × Nobulex bilateral-receipt action_ref compatibility
-/// @notice Tests that nobulex action_ref values (SHA-256 of JCS preimage per RFC 8785)
+/// @title AuditVault action_ref (RFC 8785 JCS + SHA-256) compatibility
+/// @notice Tests that action_ref values (SHA-256 of JCS preimage per RFC 8785)
 ///         are compatible as Merkle leaves in AuditVault's commitBatch / verifyLog pipeline.
-/// @dev Vectors sourced from github.com/nobulexdev/nobulex
+/// @dev Vectors sourced from github.com/nobulexdev/nobulex (MIT)
 ///      fixtures/bilateral-receipt/v0/vectors.json (schema v0.1, canon jcs-rfc8785-v1)
 ///
 /// Pipeline under test:
-///   1. Off-chain: compute action_ref = sha256(jcs(preimage_fields))  [nobulex]
+///   1. Off-chain: compute action_ref = sha256(jcs(preimage_fields))
 ///   2. Off-chain: build sorted-pair keccak256 Merkle tree of action_refs
 ///   3. On-chain:  AuditVault.commitBatch(agentAddr, merkleRoot, uri, n, score)
 ///   4. On-chain:  AuditVault.verifyLog(agentAddr, batchIdx, action_ref, proof)
@@ -25,7 +25,7 @@ contract AuditVaultActionRefTest is Test {
     AuditVault public vault;
     address submitter = makeAddr("submitter");
 
-    // Ethereum address standing in for string agent-id "nobulex-test-agent".
+    // Ethereum address standing in for the string agent_id used in the fixture preimages.
     // Off-chain registry must maintain the string → address mapping.
     address agent;
 
@@ -58,14 +58,26 @@ contract AuditVaultActionRefTest is Test {
     bytes32 constant ACTION_REF_0004 =
         0x57c4990825b8be98f326acf8065a43280f51e2c6727ffd9bdb14c62eff6985da;
 
+    // ─── Fixture: docs/EVIDENCE_SCHEMA.md §1.2 worked example ─────────────────
+    //
+    // Generated with the rfc8785 Python package (JCS) + hashlib.sha256.
+    // scope result_hash = sha256("example result").
+
+    string constant PREIMAGE_SCHEMA_EXAMPLE =
+        '{"action_type":"tool_call","agent_id":"agentaudit-example-agent","scope":"tool_call:web_search:result_hash:97e2255a47d3fa064bc6f02b70898dbc96ff64bb840b8a2d56b36d9e98b2e681","timestamp_ms":1761264000000}';
+    bytes32 constant ACTION_REF_SCHEMA_EXAMPLE =
+        0x42de5ecdb20e72e6f038c44c911870aac6200bb67db331b253bc8b794d5ffdad;
+    bytes32 constant SCHEMA_EXAMPLE_RESULT_HASH =
+        0x97e2255a47d3fa064bc6f02b70898dbc96ff64bb840b8a2d56b36d9e98b2e681;
+
     // ─── Setup ────────────────────────────────────────────────────────────────
 
     function setUp() public {
         vault = new AuditVault();
-        agent = makeAddr("nobulex-test-agent");
+        agent = makeAddr("agentaudit-test-agent");
 
         vm.prank(submitter);
-        vault.registerAgent(agent, "Guardian", "Nobulex", "Arbitrum");
+        vault.registerAgent(agent, "Guardian", "AgentAudit", "Arbitrum");
     }
 
     // ─── SHA-256 preimage verification ────────────────────────────────────────
@@ -95,6 +107,14 @@ contract AuditVaultActionRefTest is Test {
         assertEq(computed, ACTION_REF_0004, "0004: sha256 mismatch");
     }
 
+    /// @notice Keeps the docs/EVIDENCE_SCHEMA.md worked example honest: both the
+    ///         scope result_hash and the action_ref must match the published values.
+    function test_actionRef_sha256_schemaExample() public pure {
+        assertEq(sha256(bytes("example result")), SCHEMA_EXAMPLE_RESULT_HASH, "schema example: result_hash mismatch");
+        bytes32 computed = sha256(bytes(PREIMAGE_SCHEMA_EXAMPLE));
+        assertEq(computed, ACTION_REF_SCHEMA_EXAMPLE, "schema example: sha256 mismatch");
+    }
+
     // ─── Merkle anchoring ─────────────────────────────────────────────────────
 
     /// @notice Build a 4-leaf sorted-pair keccak256 Merkle tree from the four
@@ -103,7 +123,7 @@ contract AuditVaultActionRefTest is Test {
         (bytes32 root,,) = _buildTree();
 
         vm.prank(submitter);
-        vault.commitBatch(agent, root, "ipfs://nobulex-v0-batch", 4, 95);
+        vault.commitBatch(agent, root, "ipfs://action-ref-v0-batch", 4, 95);
 
         assertEq(vault.getBatchCount(agent), 1);
         AuditVault.LogBatch memory b = vault.getBatch(agent, 0);
@@ -117,7 +137,7 @@ contract AuditVaultActionRefTest is Test {
         (bytes32 root, bytes32 node01, bytes32 node23) = _buildTree();
 
         vm.prank(submitter);
-        vault.commitBatch(agent, root, "ipfs://nobulex-v0-batch", 4, 95);
+        vault.commitBatch(agent, root, "ipfs://action-ref-v0-batch", 4, 95);
 
         // Proof for leaf 0001: sibling = 0002, then uncle = node23
         bytes32[] memory proof0 = new bytes32[](2);
@@ -189,12 +209,12 @@ contract AuditVaultActionRefTest is Test {
 
     // ─── Gap documentation (non-reverting assertions) ─────────────────────────
 
-    /// @notice Documents the three structural gaps between the nobulex receipt
+    /// @notice Documents the three structural gaps between the JCS receipt
     ///         format and AuditVault's native types. None block integration, but
     ///         all require off-chain bookkeeping.
     function test_compatibility_notes() public view {
         // GAP 1: agent_id type — string vs address
-        // nobulex uses string "nobulex-test-agent"; AuditVault keys by address.
+        // Fixture preimages use a string agent_id; AuditVault keys by address.
         // Off-chain registry must maintain the bidirectional mapping.
         assertTrue(agent != address(0), "agent address must be pre-registered");
 
