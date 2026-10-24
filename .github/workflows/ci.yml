@@ -1,0 +1,46 @@
+# Tests only — no secrets, no private keys, no deploy steps.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
+
+      - name: forge build
+        run: forge build
+
+      - name: forge test
+        run: forge test
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      # test/sdk/batch.anvil.test.ts needs anvil (Foundry) + out/ from forge build;
+      # AGENTAUDIT_SKIP_ANVIL is deliberately unset so the integration test runs.
+      - name: jest
+        run: npx jest
