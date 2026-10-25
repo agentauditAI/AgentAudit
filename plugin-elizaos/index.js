@@ -17,7 +17,7 @@ const NETWORKS = {
   base: {
     rpc: "https://mainnet.base.org",
     chainId: 8453,
-    auditVault:    "0x556C4275EE68869C6874C343d0Cb7Fc3C8910873",
+    auditVault:    "0xCeE831070aa9081422f30df5559c125aa47A75DB",
     explorer:      "https://basescan.org",
   },
   arbitrum: {

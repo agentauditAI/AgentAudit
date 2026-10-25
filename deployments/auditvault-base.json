@@ -3,6 +3,8 @@
   "chainId": "8453",
   "deployedAt": "2026-06-07T16:52:34.201Z",
   "deployer": "0x218514Db9048AB350fA61Ef891ee20947c5Bbf8F",
+  "deployTx": "0x6961a6fcfa0f746eed7a6f8f541fc2bb61887e8118c0115a302a90eb5f8b90e5",
+  "block": 47030904,
   "contracts": {
     "AuditVault": "0xCeE831070aa9081422f30df5559c125aa47A75DB"
   }
