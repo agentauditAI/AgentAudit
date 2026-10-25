@@ -79,6 +79,7 @@ const INCIDENT_ABI = [
   "function registerIncident(bytes32 agentId, uint8 severity, uint8 harmType, string description, string evidenceHash, uint256 affectedPersons, uint256 occurredAt) external returns (uint256 id)",
   "function getAgentIncidents(bytes32 agentId) external view returns (uint256[])",
   "function incidents(uint256 id) external view returns (uint256 id, bytes32 agentId, uint8 severity, uint8 harmType, uint8 status, string description, string evidenceHash, uint256 affectedPersons, address reportedBy, uint256 occurredAt, uint256 registeredAt, uint256 reportedToAuthorityAt, address authorityAddress, string authorityRef, bool withinDeadline, string rootCauseUri, string correctionUri)",
+  "event IncidentRegistered(uint256 indexed id, bytes32 indexed agentId, uint8 severity, uint8 harmType, uint256 occurredAt, uint256 timestamp)",
 ];
 
 // Existing AgentAuditBatch addresses — from chain.ts env var pattern
