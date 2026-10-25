@@ -2,6 +2,33 @@
 
 Versioned separately from `@agentauditai/sdk`. Not published to npm.
 
+## 1.1.1 — unreleased
+
+### Fixed
+- **`REPORT_INCIDENT` reverted on every network.** It called the 5-argument
+  `registerIncident`, which no deployed IncidentRegistry implements. It now goes
+  through `@agentauditai/sdk` ^1.1.2 `reportIncident()`, which sends the
+  v2 7-argument call.
+- `REPORT_INCIDENT` `severity: 0` (LOW) no longer becomes MEDIUM (`??` instead
+  of `||`).
+
+### Added
+- `REPORT_INCIDENT` options `harmType` (`0`–`4` or a name, default `OTHER`) and
+  `affectedPersons` (default `0`). `severity` also accepts names (`"critical"`).
+  Invalid values return `false` without sending a transaction.
+- The callback carries `incidentId`, `severity` and `harmType` (names), plus the
+  Art. 73§2 deadline in its text.
+- `AUDIT_INCIDENT_REGISTRY` is optional: the SDK's per-network default registry
+  is used (Optimism has its own address). `validate` now needs only
+  `AUDIT_PRIVATE_KEY` and a known `AUDIT_NETWORK`. A configured address that is
+  not an IncidentRegistry v2 fails with
+  `IncidentRegistry v2 is not available on <network>: …`.
+
+### Unchanged
+- The on-chain `agentId`: a bytes32 `options.agentId` is passed through, otherwise
+  `keccak256(AUDIT_AGENT_ID)`, as in 1.1.0. The default `evidenceHash` is still
+  `keccak256(description)`.
+
 ## 1.1.0 — unreleased
 
 ### Changed
@@ -47,6 +74,7 @@ Versioned separately from `@agentauditai/sdk`. Not published to npm.
 - TODO: `RECORD_METRIC` uses `options?.metricType || 3`, so `metricType: 0`
   (ERROR_RATE) silently becomes `3` (COMPLIANCE_SCORE). `REPORT_INCIDENT` has
   the same `||` pattern for `severity` (`0` LOW becomes `1` MEDIUM). Fix with `??`.
+  *(`REPORT_INCIDENT` fixed in 1.1.1.)*
 - Batch history is kept in memory for `getInclusionProof`; after a restart,
   proofs must be rebuilt from the batch files.
 - Default `AUDIT_NETWORK` stays `mantle`: Base has no recorded PostMarketMonitor
@@ -59,6 +87,7 @@ Versioned separately from `@agentauditai/sdk`. Not published to npm.
   `registerIncident(bytes32,uint8,uint8,string,string,uint256,uint256)`
   (adds `harmType`, `affectedPersons`); the call reverts there. The SDK's
   `reportIncident()` has the same ABI. Not changed in this release.
+  *(Fixed in 1.1.1.)*
 
 ## 1.0.0
 

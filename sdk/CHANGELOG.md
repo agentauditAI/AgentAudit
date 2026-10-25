@@ -2,6 +2,58 @@
 
 All notable changes to this package. Versions follow [SemVer](https://semver.org/).
 
+## 1.1.2 — 2026-10-25
+
+### Fixed
+- **`reportIncident()` reverted on every network.** It sent the 5-argument
+  `registerIncident(bytes32,uint8,string,string,uint256)`, but every deployed
+  IncidentRegistry is v2 (`contracts/v2/IncidentRegistry.sol`), which only has the
+  7-argument `registerIncident(bytes32,uint8,uint8,string,string,uint256,uint256)`.
+  It now sends the v2 call. Runtime bytecode on Mantle, Base, Arbitrum One,
+  Optimism and Polygon was checked against the source (solc 0.8.20, via-IR,
+  `paris`): it matches on all five. No incident had ever been registered
+  (`incidentCount() == 0` everywhere).
+- **`markReportedToAuthority()` reverted too.** v2 takes
+  `(uint256 id, address authority, string authorityRef)`. The SDK method is now
+  `markReportedToAuthority(incidentId, { authority, authorityRef })`. The old
+  one-argument call could never succeed, so this signature change breaks nothing
+  that worked. `withinDeadline` now comes from the `IncidentReported` event (the
+  value the registry recorded), not from a separate pre-call read.
+- The `incidents(uint256)` ABI now matches the v2 struct (adds `harmType`,
+  `affectedPersons`, `authorityAddress`, `authorityRef`, `rootCauseUri`,
+  `correctionUri`).
+- `reportIncident()` returns the real `incidentId` (from `IncidentRegistered`)
+  instead of `0`.
+- The default `occurredAt` is now the latest block timestamp instead of
+  `Date.now()`, which could be ahead of block time, and the registry reverts with
+  `FutureTimestamp` when `occurredAt` is in the future.
+
+### Added
+- `reportIncident()` params `harmType` (`DEATH` | `SERIOUS_HEALTH_HARM` |
+  `SIGNIFICANT_PROPERTY_DAMAGE` | `FUNDAMENTAL_RIGHTS_VIOLATION` | `OTHER`, default
+  `OTHER`) and `affectedPersons` (default `0`). Invalid `severity` / `harmType` /
+  negative `affectedPersons` throw before any RPC call.
+- **Per-network IncidentRegistry defaults** (`NETWORKS.<net>.incidentRegistry`,
+  from `deployments/`): `0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F`, except
+  Optimism: `0x976b03a2417cf7926813605F427ED499fdF61e10`.
+  `incidentRegistryAddress` / `AUDIT_INCIDENT_REGISTRY` are now optional overrides
+  (an empty `AUDIT_INCIDENT_REGISTRY=` is ignored).
+- **Registry check, once per instance.** Before the first incident call, the SDK
+  checks that the registry address has code implementing the v2 functions. If not,
+  it throws `IncidentRegistry v2 is not available on <network>: <address> has no
+  contract code | does not implement <signatures>` without sending a transaction.
+  The result is cached; transient RPC errors are not, so the next call retries.
+- `getIncident(id)` (typed record with enum names), `getAgentIncidents(agentId)`,
+  `isWithinDeadline(id)`; types `HarmType`, `IncidentStatus`, `Incident`,
+  `ReportIncidentParams`.
+- `agentId` for incident methods may be a bytes32 hex string, which is used as-is
+  (as the MCP server's `report_incident` does). Any other value is still
+  `keccak256(String(agentId))`.
+
+### Docs
+- README: "Report a serious incident (Art. 73)" with a parameter table, and the
+  default IncidentRegistry address per network.
+
 ## 1.1.1 — 2026-10-25
 
 ### Fixed

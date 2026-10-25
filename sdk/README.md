@@ -151,6 +151,49 @@ const { txHash } = await audit.recordReview({
 console.log(`Review recorded: ${txHash}`);
 ```
 
+### 5. Report a serious incident (Art. 73)
+
+Writes to **IncidentRegistry v2** (`contracts/v2/IncidentRegistry.sol`). Every
+network has a default registry, so no address is needed.
+
+```ts
+import AgentAudit from "@agentauditai/sdk";
+
+const audit = new AgentAudit({ privateKey: process.env.AGENT_PRIVATE_KEY!, network: "base" });
+
+const { incidentId, txHash } = await audit.reportIncident({
+  agentId: 42,                                  // or a bytes32 hex string
+  severity: "HIGH",                             // LOW | MEDIUM | HIGH | CRITICAL
+  harmType: "FUNDAMENTAL_RIGHTS_VIOLATION",     // optional, default "OTHER"
+  affectedPersons: 12,                          // optional, default 0
+  description: "Credit model denied applicants by postcode",
+  evidenceHash: "ipfs://bafy...",               // optional, default keccak256(description)
+  occurredAt: 1761300000,                       // optional, default latest block time
+});
+
+// Once the national market surveillance authority has been notified (Art. 73§2):
+const { withinDeadline } = await audit.markReportedToAuthority(incidentId, {
+  authority: "0x...",            // address (or identifier) of the notified authority
+  authorityRef: "MSA-2026-0042", // case reference issued by the authority
+});
+
+const incident = await audit.getIncident(incidentId); // status, authorityRef, withinDeadline, ...
+```
+
+| Parameter | Type | Default | On-chain |
+|---|---|---|---|
+| `agentId` | `string \| number` | required | `bytes32`: a 0x-prefixed 32-byte hex value is used as-is, anything else is `keccak256(String(agentId))` |
+| `severity` | `IncidentSeverity` | required | Sets the reporting deadline: CRITICAL 2 days, HIGH 10 days, MEDIUM/LOW 15 days |
+| `harmType` | `"DEATH" \| "SERIOUS_HEALTH_HARM" \| "SIGNIFICANT_PROPERTY_DAMAGE" \| "FUNDAMENTAL_RIGHTS_VIOLATION" \| "OTHER"` | `"OTHER"` | Nature of harm, the Art. 73§1 qualifying condition |
+| `affectedPersons` | `number \| bigint` (≥ 0) | `0` | Number of persons affected (Art. 73§3) |
+| `description` | `string` | required | Stored **in plain text** on-chain, so leave out personal data |
+| `evidenceHash` | `string` | `keccak256(description)` | Hash or IPFS/Arweave URI of the evidence |
+| `occurredAt` | unix seconds | latest block timestamp | Must not be in the future (the registry reverts) |
+
+`markReportedToAuthority` can only be called by the wallet that reported the
+incident, or by the registry deployer. Other methods: `getAgentIncidents(agentId)`
+and `isWithinDeadline(incidentId)`.
+
 ---
 
 ## EU AI Act Coverage
@@ -189,6 +232,24 @@ pass `auditVaultAddress` pointing at an AuditVault v2 deployment on that chain.
 Registration, incident (Art. 73) and monitoring (Art. 72) methods are not
 affected by this table.
 
+### IncidentRegistry (Art. 73)
+
+Default IncidentRegistry v2 addresses, from `deployments/phase7-<network>.json`.
+On every network the runtime bytecode matches `contracts/v2/IncidentRegistry.sol`
+(solc 0.8.20, via-IR, 200 runs, `paris`):
+
+| Network | Default IncidentRegistry |
+|---------|--------------------------|
+| Base, Arbitrum One, Polygon, Mantle | `0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F` |
+| Optimism | `0x976b03a2417cf7926813605F427ED499fdF61e10` |
+
+Pass `incidentRegistryAddress` to use another deployment. On its first incident
+call, each `AgentAudit` instance checks once that the address has code
+implementing the v2 functions. If it doesn't (no contract, or an older registry),
+every incident method throws
+`IncidentRegistry v2 is not available on <network>: <address> …` without sending
+a transaction.
+
 ---
 
 ## Environment variables
@@ -196,7 +257,7 @@ affected by this table.
 | Variable | Used by |
 |----------|---------|
 | `AUDIT_PRIVATE_KEY` | `createAgentAudit()` — agent wallet key (`AGENT_AUDIT_PRIVATE_KEY`, the name shown in the 1.0.x README, is still accepted but deprecated) |
-| `AUDIT_INCIDENT_REGISTRY` | `createAgentAudit()` — IncidentRegistry address (Art. 73) |
+| `AUDIT_INCIDENT_REGISTRY` | `createAgentAudit()` — optional IncidentRegistry v2 override (Art. 73); default per network |
 | `AUDIT_MONITOR_ADDRESS` | `createAgentAudit()` — PostMarketMonitor address (Art. 72) |
 
 Never commit private keys — keep them in a gitignored `.env`.

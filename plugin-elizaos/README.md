@@ -17,7 +17,7 @@ after the first buffered entry, or on demand.
 | `REGISTER_AGENT` | Registers the agent in AgentRegistration (Mantle) | Art. 13, 26 |
 | `LOG_AUDIT` | Buffers one action for batch anchoring; `flush: true` anchors now | Art. 12, 19, 50 |
 | `LOG_AUDIT_BATCH` | Buffers several actions and anchors them in one `commitBatch` | Art. 12, 19 |
-| `REPORT_INCIDENT` | Registers an incident in IncidentRegistry | Art. 73 |
+| `REPORT_INCIDENT` | Registers an incident in IncidentRegistry v2 (see below) | Art. 73 |
 | `RECORD_METRIC` | Records a post-market monitoring metric | Art. 72 |
 | `AUDIT_STATUS` | Network, batch-anchoring availability, batches on-chain, pending entries | — |
 
@@ -28,6 +28,26 @@ message. It never blocks the agent and swallows failures.
 `getInclusionProof(actionRef)` → `{ leaf, proof[], root, batchId, batchIndex, agentAddress, txHash }`,
 which verifies on-chain with `AuditVault.verifyLog(agentAddress, batchIndex, leaf, proof)`.
 
+### `REPORT_INCIDENT` options
+
+Uses the SDK's `reportIncident()` against IncidentRegistry v2. Every network has a
+default registry ([addresses](../sdk/README.md#incidentregistry-art-73)).
+
+| Option | Values | Default |
+|---|---|---|
+| `severity` | `0`–`3` or `LOW` \| `MEDIUM` \| `HIGH` \| `CRITICAL` (any case) | `MEDIUM` |
+| `harmType` | `0`–`4` or `DEATH` \| `SERIOUS_HEALTH_HARM` \| `SIGNIFICANT_PROPERTY_DAMAGE` \| `FUNDAMENTAL_RIGHTS_VIOLATION` \| `OTHER` | `OTHER` |
+| `affectedPersons` | integer ≥ 0 | `0` |
+| `description` | text, **stored in plain text on-chain** | the message text |
+| `evidenceHash` | hash or IPFS/Arweave URI | `keccak256(description)` |
+| `occurredAt` | unix seconds, not in the future | latest block time |
+| `agentId` | bytes32 hex (used as-is) or any id (keccak256-hashed) | `AUDIT_AGENT_ID` |
+
+An invalid `severity` / `harmType` returns `false` without sending anything. The
+callback carries `incidentId`, `txHash`, `severity` and `harmType`. If the
+configured address is not an IncidentRegistry v2, the action returns `false` with
+`IncidentRegistry v2 is not available on <network>: …`.
+
 ## Configuration
 
 | Variable | Required | Meaning |
@@ -36,7 +56,7 @@ which verifies on-chain with `AuditVault.verifyLog(agentAddress, batchIndex, lea
 | `AUDIT_AGENT_ID` | for logging | Numeric agent id from AgentRegistration (goes into each preimage) |
 | `AUDIT_NETWORK` | no | `mantle` (default) \| `base` \| `arbitrum` \| `optimism` \| `polygon` |
 | `AUDIT_AUTO_LOG` | no | `true` = auto-log every message |
-| `AUDIT_INCIDENT_REGISTRY` | for `REPORT_INCIDENT` | IncidentRegistry address |
+| `AUDIT_INCIDENT_REGISTRY` | no | IncidentRegistry v2 override (default: the SDK's address for `AUDIT_NETWORK`) |
 | `AUDIT_MONITOR_ADDRESS` | for `RECORD_METRIC` | PostMarketMonitor address |
 | `AUDIT_REGISTRATION_ADDRESS` | no | AgentRegistration override (Mantle) |
 | `AUDIT_BATCH_DIR` | no | Where batch JSON files are written (default `./agentaudit-batches`) |

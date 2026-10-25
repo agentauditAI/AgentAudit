@@ -13,6 +13,10 @@ export * from "./batch";
 // vaultVersion: 1 = AuditVault v1, 2 = AuditVault v2 (verified bytecode),
 // null = a contract that is not AuditVault v2 (no commitBatch). Batch
 // anchoring works only where vaultVersion is 2, or with auditVaultAddress.
+//
+// incidentRegistry: IncidentRegistry v2 (contracts/v2/IncidentRegistry.sol,
+// Art. 73) from deployments/phase7-<network>.json — runtime bytecode verified
+// against the source on all five networks. Optimism has its own address.
 
 export const NETWORKS = {
   mantle: {
@@ -20,6 +24,7 @@ export const NETWORKS = {
     chainId:    5000,
     auditVault: "0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b",
     vaultVersion: 1,
+    incidentRegistry: "0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F",
     explorer:   "https://explorer.mantle.xyz",
     name:       "Mantle Mainnet",
   },
@@ -28,6 +33,7 @@ export const NETWORKS = {
     chainId:    8453,
     auditVault: "0xCeE831070aa9081422f30df5559c125aa47A75DB",
     vaultVersion: 2,
+    incidentRegistry: "0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F",
     explorer:   "https://basescan.org",
     name:       "Base Mainnet",
   },
@@ -36,6 +42,7 @@ export const NETWORKS = {
     chainId:    42161,
     auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C",
     vaultVersion: null, // not AuditVault v2 — no commitBatch (see README "Supported Networks")
+    incidentRegistry: "0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F",
     explorer:   "https://arbiscan.io",
     name:       "Arbitrum One",
   },
@@ -44,6 +51,7 @@ export const NETWORKS = {
     chainId:    10,
     auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C",
     vaultVersion: null, // not AuditVault v2 — no commitBatch (see README "Supported Networks")
+    incidentRegistry: "0x976b03a2417cf7926813605F427ED499fdF61e10",
     explorer:   "https://optimistic.etherscan.io",
     name:       "Optimism Mainnet",
   },
@@ -52,6 +60,7 @@ export const NETWORKS = {
     chainId:    137,
     auditVault: "0x6fC00423Df95a7caf6fFFDD93169b5C01480de02",
     vaultVersion: null, // not AuditVault v2 — no commitBatch (see README "Supported Networks")
+    incidentRegistry: "0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F",
     explorer:   "https://polygonscan.com",
     name:       "Polygon Mainnet",
   },
@@ -83,12 +92,20 @@ const AGENT_REGISTRATION_ABI = [
   "function agents(uint256) external view returns (string name, address operator, uint256 createdAt, string complianceLevel, uint256 spendLimit, address auditVault, bool revoked)",
 ];
 
+// IncidentRegistry v2 (contracts/v2/IncidentRegistry.sol) — Art. 73
 const INCIDENT_REGISTRY_ABI = [
-  "function registerIncident(bytes32 agentId, uint8 severity, string description, string evidenceHash, uint256 occurredAt) external returns (uint256 id)",
-  "function markReportedToAuthority(uint256 id) external",
+  "function registerIncident(bytes32 agentId, uint8 severity, uint8 harmType, string description, string evidenceHash, uint256 affectedPersons, uint256 occurredAt) external returns (uint256 id)",
+  "function markReportedToAuthority(uint256 id, address authority, string authorityRef) external",
   "function isWithinDeadline(uint256 id) external view returns (bool)",
-  "function incidents(uint256) external view returns (uint256 id, bytes32 agentId, uint8 severity, uint8 status, string description, string evidenceHash, address reportedBy, uint256 occurredAt, uint256 registeredAt, uint256 reportedToAuthorityAt, bool withinDeadline)",
+  "function reportingDeadline(uint256 id) external view returns (uint256)",
+  "function getAgentIncidents(bytes32 agentId) external view returns (uint256[])",
+  "function incidents(uint256) external view returns (uint256 id, bytes32 agentId, uint8 severity, uint8 harmType, uint8 status, string description, string evidenceHash, uint256 affectedPersons, address reportedBy, uint256 occurredAt, uint256 registeredAt, uint256 reportedToAuthorityAt, address authorityAddress, string authorityRef, bool withinDeadline, string rootCauseUri, string correctionUri)",
+  "event IncidentRegistered(uint256 indexed id, bytes32 indexed agentId, uint8 severity, uint8 harmType, uint256 occurredAt, uint256 timestamp)",
+  "event IncidentReported(uint256 indexed id, address authority, string authorityRef, bool withinDeadline, uint256 timestamp)",
 ];
+
+// Functions an address must implement to count as IncidentRegistry v2
+const INCIDENT_REGISTRY_REQUIRED = ["registerIncident", "markReportedToAuthority", "incidents"] as const;
 
 const POST_MARKET_MONITOR_ABI = [
   "function enroll(address agent, string systemName, string riskCategory, uint256 reviewIntervalDays) external",
@@ -103,6 +120,14 @@ const POST_MARKET_MONITOR_ABI = [
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
 export type ComplianceLevel = "minimal" | "limited" | "high";
 export type IncidentSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+/** Nature of harm — Art. 73§1 qualifying conditions (IncidentRegistry.HarmType) */
+export type HarmType =
+  | "DEATH"
+  | "SERIOUS_HEALTH_HARM"
+  | "SIGNIFICANT_PROPERTY_DAMAGE"
+  | "FUNDAMENTAL_RIGHTS_VIOLATION"
+  | "OTHER";
+export type IncidentStatus = "OPEN" | "REPORTED" | "UNDER_INVESTIGATION" | "RESOLVED" | "CLOSED";
 export type MetricType = "ERROR_RATE" | "DRIFT_SCORE" | "LATENCY_MS" | "COMPLIANCE_SCORE" | "CUSTOM";
 
 export interface AgentAuditConfig {
@@ -116,7 +141,7 @@ export interface AgentAuditConfig {
   auditVaultAddress?: string;
   /** AgentRegistration contract address (Mantle primary registry) */
   registrationAddress?: string;
-  /** IncidentRegistry contract address (Art. 73) */
+  /** Override the IncidentRegistry v2 address (Art. 73); defaults per network */
   incidentRegistryAddress?: string;
   /** PostMarketMonitor contract address (Art. 72) */
   postMarketMonitorAddress?: string;
@@ -148,6 +173,48 @@ export interface IncidentResult {
   withinDeadline?: boolean;
 }
 
+export interface ReportIncidentParams {
+  /** Numeric/string agent ID (hashed with keccak256) or a bytes32 hex string (used as-is) */
+  agentId: string | number;
+  severity: IncidentSeverity;
+  description: string;
+  /** Nature of harm (Art. 73§1); default "OTHER" */
+  harmType?: HarmType;
+  /** Number of persons affected (Art. 73§3); default 0 */
+  affectedPersons?: number | bigint;
+  /** Hash or IPFS CID of evidence; default keccak256(description) */
+  evidenceHash?: string;
+  /** Unix seconds, must not be in the future; default latest block timestamp */
+  occurredAt?: number;
+}
+
+/** IncidentRegistry v2 `incidents(id)` record */
+export interface Incident {
+  id: number;
+  agentId: string;
+  severity: IncidentSeverity;
+  harmType: HarmType;
+  status: IncidentStatus;
+  description: string;
+  evidenceHash: string;
+  affectedPersons: bigint;
+  reportedBy: string;
+  occurredAt: number;
+  registeredAt: number;
+  reportedToAuthorityAt: number;
+  authorityAddress: string;
+  authorityRef: string;
+  withinDeadline: boolean;
+  rootCauseUri: string;
+  correctionUri: string;
+}
+
+const SEVERITIES: readonly IncidentSeverity[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const HARM_TYPES: readonly HarmType[] = [
+  "DEATH", "SERIOUS_HEALTH_HARM", "SIGNIFICANT_PROPERTY_DAMAGE", "FUNDAMENTAL_RIGHTS_VIOLATION", "OTHER",
+];
+const INCIDENT_STATUSES: readonly IncidentStatus[] = ["OPEN", "REPORTED", "UNDER_INVESTIGATION", "RESOLVED", "CLOSED"];
+
 // ─── Main SDK Class ───────────────────────────────────────────────────────────
 
 export class AgentAudit implements BatchCommitter {
@@ -160,7 +227,7 @@ export class AgentAudit implements BatchCommitter {
 
   // Optional Phase 7 contracts
   private _registration?: ethers.Contract;
-  private _incidentRegistry?: ethers.Contract;
+  private _incidentRegistry?: Promise<ethers.Contract>;
   private _postMarketMonitor?: ethers.Contract;
 
   private config: AgentAuditConfig;
@@ -208,18 +275,38 @@ export class AgentAudit implements BatchCommitter {
     return this._auditVaultV2;
   }
 
-  private get incidentRegistry(): ethers.Contract {
-    if (!this.config.incidentRegistryAddress) {
-      throw new Error("incidentRegistryAddress not configured. Pass it in AgentAuditConfig.");
-    }
-    if (!this._incidentRegistry) {
-      this._incidentRegistry = new ethers.Contract(
-        this.config.incidentRegistryAddress,
-        INCIDENT_REGISTRY_ABI,
-        this.wallet
-      );
-    }
+  /**
+   * The IncidentRegistry v2 contract, after checking once per instance that the
+   * address has code implementing the v2 functions. A mismatch is cached (it
+   * will not fix itself); an RPC failure is not, so the next call retries.
+   */
+  private incidentRegistry(): Promise<ethers.Contract> {
+    this._incidentRegistry ??= this.verifyIncidentRegistry().catch((err) => {
+      if (!err.incidentRegistryMismatch) this._incidentRegistry = undefined;
+      throw err;
+    });
     return this._incidentRegistry;
+  }
+
+  private async verifyIncidentRegistry(): Promise<ethers.Contract> {
+    const addr = this.config.incidentRegistryAddress ?? this.network.incidentRegistry;
+    const contract = new ethers.Contract(addr, INCIDENT_REGISTRY_ABI, this.wallet);
+    const code = (await this.provider.getCode(addr)).toLowerCase();
+    // Selectors appear in the dispatcher as PUSH4 (0x63) immediates
+    const missing = INCIDENT_REGISTRY_REQUIRED
+      .map((name) => contract.interface.getFunction(name)!)
+      .filter((fn) => !code.includes("63" + fn.selector.slice(2)))
+      .map((fn) => fn.format("sighash"));
+    if (code === "0x" || missing.length) {
+      const what = code === "0x" ? "has no contract code" : `does not implement ${missing.join(", ")}`;
+      const err = new Error(
+        `IncidentRegistry v2 is not available on ${this.network.name}: ${addr} ${what}. ` +
+        "Pass incidentRegistryAddress pointing at an IncidentRegistry v2 deployment (contracts/v2/IncidentRegistry.sol)."
+      );
+      Object.assign(err, { incidentRegistryMismatch: true });
+      throw err;
+    }
+    return contract;
   }
 
   private get postMarketMonitor(): ethers.Contract {
@@ -247,8 +334,16 @@ export class AgentAudit implements BatchCommitter {
     return { LOW: 0, MEDIUM: 1, HIGH: 2 }[risk];
   }
 
-  private severityToUint(severity: IncidentSeverity = "MEDIUM"): number {
-    return { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 }[severity];
+  private enumIndex<T extends string>(labels: readonly T[], value: T, name: string): number {
+    const i = labels.indexOf(value);
+    if (i < 0) throw new Error(`Invalid ${name}: ${String(value)}. Use one of ${labels.join(", ")}`);
+    return i;
+  }
+
+  /** bytes32 hex is used as-is; anything else is keccak256(String(agentId)) */
+  private incidentAgentId(agentId: string | number): string {
+    const s = String(agentId);
+    return /^0x[0-9a-fA-F]{64}$/.test(s) ? s : ethers.id(s);
   }
 
   private metricTypeToUint(type: MetricType = "COMPLIANCE_SCORE"): number {
@@ -409,39 +504,110 @@ export class AgentAudit implements BatchCommitter {
 
   /**
    * Register an incident on-chain (Art. 73)
-   * Enforces 15/10/2 day reporting timelines automatically
+   * The registry enforces the 15/10/2 day reporting timelines (Art. 73§2)
    */
-  async reportIncident(params: {
-    agentId: string | number;
-    severity: IncidentSeverity;
-    description: string;
-    evidenceHash?: string;
-    occurredAt?: number;
-  }): Promise<IncidentResult> {
-    const agentIdBytes = ethers.id(String(params.agentId));
-    const evidenceHash = params.evidenceHash ?? this.hashPayload(params.description);
-    const occurredAt   = params.occurredAt   ?? Math.floor(Date.now() / 1000);
+  async reportIncident(params: ReportIncidentParams): Promise<IncidentResult> {
+    const severity = this.enumIndex(SEVERITIES, params.severity, "severity");
+    const harmType = this.enumIndex(HARM_TYPES, params.harmType ?? "OTHER", "harmType");
+    const affectedPersons = BigInt(params.affectedPersons ?? 0);
+    if (affectedPersons < 0n) throw new Error(`Invalid affectedPersons: ${affectedPersons}`);
 
-    const tx = await this.incidentRegistry.registerIncident(
-      agentIdBytes,
-      this.severityToUint(params.severity),
+    const registry = await this.incidentRegistry();
+    const evidenceHash = params.evidenceHash ?? this.hashPayload(params.description);
+    // Block time, not Date.now(): the registry rejects occurredAt > block.timestamp
+    const occurredAt = params.occurredAt ?? (await this.provider.getBlock("latest"))!.timestamp;
+
+    const tx = await registry.registerIncident(
+      this.incidentAgentId(params.agentId),
+      severity,
+      harmType,
       params.description,
       evidenceHash,
+      affectedPersons,
       occurredAt
     );
     const receipt = await tx.wait();
 
-    return { incidentId: 0, txHash: tx.hash };
+    let incidentId = 0;
+    for (const log of receipt?.logs ?? []) {
+      const parsed = (() => { try { return registry.interface.parseLog(log); } catch { return null; } })();
+      if (parsed?.name === "IncidentRegistered") {
+        incidentId = Number(parsed.args.id);
+        break;
+      }
+    }
+    return { incidentId, txHash: tx.hash };
   }
 
   /**
-   * Mark incident as reported to authority (Art. 73 — starts deadline clock)
+   * Mark an incident as reported to the national market surveillance authority
+   * (Art. 73§2). Only the original reporter or the registry deployer may call it.
+   * @param params.authority    Address (or identifier) of the notified authority
+   * @param params.authorityRef Authority-issued case reference
    */
-  async markReportedToAuthority(incidentId: number): Promise<{ txHash: string; withinDeadline: boolean }> {
-    const withinDeadline = await this.incidentRegistry.isWithinDeadline(incidentId);
-    const tx = await this.incidentRegistry.markReportedToAuthority(incidentId);
-    await tx.wait();
+  async markReportedToAuthority(
+    incidentId: number,
+    params: { authority: string; authorityRef: string }
+  ): Promise<{ txHash: string; withinDeadline: boolean }> {
+    const registry = await this.incidentRegistry();
+    const tx = await registry.markReportedToAuthority(
+      incidentId,
+      ethers.getAddress(params.authority),
+      params.authorityRef
+    );
+    const receipt = await tx.wait();
+
+    let withinDeadline = false;
+    for (const log of receipt?.logs ?? []) {
+      const parsed = (() => { try { return registry.interface.parseLog(log); } catch { return null; } })();
+      if (parsed?.name === "IncidentReported") {
+        withinDeadline = parsed.args.withinDeadline;
+        break;
+      }
+    }
     return { txHash: tx.hash, withinDeadline };
+  }
+
+  /**
+   * Read an incident record (IncidentRegistry v2 `incidents(id)`)
+   */
+  async getIncident(incidentId: number): Promise<Incident> {
+    const r = await (await this.incidentRegistry()).incidents(incidentId);
+    if (r.id === 0n) throw new Error(`Incident ${incidentId} not found`);
+    return {
+      id: Number(r.id),
+      agentId: r.agentId,
+      severity: SEVERITIES[Number(r.severity)],
+      harmType: HARM_TYPES[Number(r.harmType)],
+      status: INCIDENT_STATUSES[Number(r.status)],
+      description: r.description,
+      evidenceHash: r.evidenceHash,
+      affectedPersons: r.affectedPersons,
+      reportedBy: r.reportedBy,
+      occurredAt: Number(r.occurredAt),
+      registeredAt: Number(r.registeredAt),
+      reportedToAuthorityAt: Number(r.reportedToAuthorityAt),
+      authorityAddress: r.authorityAddress,
+      authorityRef: r.authorityRef,
+      withinDeadline: r.withinDeadline,
+      rootCauseUri: r.rootCauseUri,
+      correctionUri: r.correctionUri,
+    };
+  }
+
+  /**
+   * Incident IDs registered for an agent (same agentId rules as reportIncident)
+   */
+  async getAgentIncidents(agentId: string | number): Promise<number[]> {
+    const ids = await (await this.incidentRegistry()).getAgentIncidents(this.incidentAgentId(agentId));
+    return ids.map(Number);
+  }
+
+  /**
+   * Whether an incident is still within its Art. 73§2 reporting deadline
+   */
+  async isWithinDeadline(incidentId: number): Promise<boolean> {
+    return (await this.incidentRegistry()).isWithinDeadline(incidentId);
   }
 
   // ─── Post-Market Monitoring (Art. 72) ─────────────────────────────────────
@@ -553,7 +719,7 @@ export function createAgentAudit(network: NetworkName = "base"): AgentAudit {
   return new AgentAudit({
     privateKey,
     network,
-    incidentRegistryAddress: process.env.AUDIT_INCIDENT_REGISTRY,
+    incidentRegistryAddress: process.env.AUDIT_INCIDENT_REGISTRY || undefined,
     postMarketMonitorAddress: process.env.AUDIT_MONITOR_ADDRESS,
   });
 }
@@ -592,7 +758,13 @@ export default AgentAudit;
 // const incident = await audit.reportIncident({
 //   agentId: 1,
 //   severity: "HIGH",
+//   harmType: "SIGNIFICANT_PROPERTY_DAMAGE",
+//   affectedPersons: 12,
 //   description: "Unexpected behavior detected in financial agent",
+// });
+// await audit.markReportedToAuthority(incident.incidentId, {
+//   authority: "0x...",          // notified market surveillance authority
+//   authorityRef: "MSA-2026-0042",
 // });
 //
 // // Record monitoring metric (Art. 72)

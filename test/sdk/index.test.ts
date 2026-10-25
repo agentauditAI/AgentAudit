@@ -1,4 +1,5 @@
 import { AgentAudit, createAgentAudit, NETWORKS, resolveBatchBuffer } from "../../sdk/src/index";
+import { ethers } from "ethers";
 
 // anvil default account #0 — public test key
 const KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
@@ -95,5 +96,105 @@ describe("batch anchoring availability", () => {
       "Batch anchoring is not available on Optimism Mainnet"
     );
     expect(resolveBatchBuffer(new AgentAudit({ privateKey: KEY, network: "base" })).agentAddress).toBe(ADDRESS);
+  });
+});
+
+describe("IncidentRegistry v2 (Art. 73)", () => {
+  const sel = (sig: string) => ethers.id(sig).slice(2, 10);
+  const SIGS = [
+    "registerIncident(bytes32,uint8,uint8,string,string,uint256,uint256)",
+    "markReportedToAuthority(uint256,address,string)",
+    "incidents(uint256)",
+  ];
+  // Minimal "runtime code": each required selector as a PUSH4 immediate
+  const V2_CODE = "0x" + SIGS.map((s) => "63" + sel(s)).join("");
+  const REPORT = { agentId: 1, severity: "HIGH" as const, description: "x" };
+
+  function withCode(code: string | (() => Promise<string>), config: Partial<ConstructorParameters<typeof AgentAudit>[0]> = {}) {
+    const sdk = new AgentAudit({ privateKey: KEY, network: "base", ...config });
+    const getCode = jest.spyOn((sdk as any).provider, "getCode")
+      .mockImplementation(typeof code === "string" ? async () => code : code);
+    return { sdk, getCode };
+  }
+
+  it("NETWORKS carries the verified per-network registry; Optimism has its own address", () => {
+    for (const n of ["mantle", "base", "arbitrum", "polygon"] as const) {
+      expect(NETWORKS[n].incidentRegistry).toBe("0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F");
+    }
+    expect(NETWORKS.optimism.incidentRegistry).toBe("0x976b03a2417cf7926813605F427ED499fdF61e10");
+  });
+
+  it("checks the network default address, once per instance", async () => {
+    const { sdk, getCode } = withCode(V2_CODE, { network: "optimism" });
+    await (sdk as any).incidentRegistry();
+    await (sdk as any).incidentRegistry();
+    expect(getCode).toHaveBeenCalledTimes(1);
+    expect(getCode).toHaveBeenCalledWith("0x976b03a2417cf7926813605F427ED499fdF61e10");
+  });
+
+  it("incidentRegistryAddress overrides the default", async () => {
+    const override = "0x" + "12".repeat(20);
+    const { sdk, getCode } = withCode(V2_CODE, { incidentRegistryAddress: override });
+    expect(await (await (sdk as any).incidentRegistry()).getAddress()).toBe(ethers.getAddress(override));
+    expect(getCode).toHaveBeenCalledWith(override);
+  });
+
+  it("throws a clear error when the address has no code, and caches it", async () => {
+    const { sdk, getCode } = withCode("0x");
+    const msg = "IncidentRegistry v2 is not available on Base Mainnet: 0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F has no contract code";
+    await expect(sdk.reportIncident(REPORT)).rejects.toThrow(msg);
+    await expect(sdk.getIncident(1)).rejects.toThrow(msg);
+    expect(getCode).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the v2 functions a contract is missing (e.g. the old 5-arg registry)", async () => {
+    const old5 = "0x63" + sel("registerIncident(bytes32,uint8,string,string,uint256)") + "63" + sel("incidents(uint256)");
+    const { sdk } = withCode(old5);
+    await expect(sdk.reportIncident(REPORT)).rejects.toThrow(
+      "does not implement registerIncident(bytes32,uint8,uint8,string,string,uint256,uint256), markReportedToAuthority(uint256,address,string)"
+    );
+  });
+
+  it("does not cache RPC failures — the next call retries the check", async () => {
+    let calls = 0;
+    const { sdk, getCode } = withCode(async () => {
+      if (calls++ === 0) throw new Error("rpc down");
+      return V2_CODE;
+    });
+    await expect((sdk as any).incidentRegistry()).rejects.toThrow("rpc down");
+    await expect((sdk as any).incidentRegistry()).resolves.toBeDefined();
+    expect(getCode).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [{ severity: "SEVERE" }, "Invalid severity: SEVERE"],
+    [{ harmType: "PAPERCUT" }, "Invalid harmType: PAPERCUT"],
+    [{ affectedPersons: -1 }, "Invalid affectedPersons: -1"],
+  ])("reportIncident rejects %o before any RPC", async (bad, msg) => {
+    const { sdk, getCode } = withCode(V2_CODE);
+    await expect(sdk.reportIncident({ ...REPORT, ...(bad as object) } as any)).rejects.toThrow(msg);
+    expect(getCode).not.toHaveBeenCalled();
+  });
+
+  it("markReportedToAuthority rejects a non-address authority", async () => {
+    const { sdk } = withCode(V2_CODE);
+    await expect(sdk.markReportedToAuthority(1, { authority: "MSA-DE", authorityRef: "r" })).rejects.toThrow(/invalid address/);
+  });
+
+  it("agentId: bytes32 hex is used as-is, anything else is keccak256(String(id))", () => {
+    const sdk = new AgentAudit({ privateKey: KEY, network: "base" });
+    const raw = "0x" + "ab".repeat(32);
+    expect((sdk as any).incidentAgentId(raw)).toBe(raw);
+    expect((sdk as any).incidentAgentId(7)).toBe(ethers.id("7"));
+    expect((sdk as any).incidentAgentId("0xabc")).toBe(ethers.id("0xabc"));
+  });
+
+  it("createAgentAudit ignores an empty AUDIT_INCIDENT_REGISTRY", () => {
+    process.env.AUDIT_PRIVATE_KEY = KEY;
+    const saved = process.env.AUDIT_INCIDENT_REGISTRY;
+    process.env.AUDIT_INCIDENT_REGISTRY = "";
+    expect((createAgentAudit("base") as any).config.incidentRegistryAddress).toBeUndefined();
+    if (saved === undefined) delete process.env.AUDIT_INCIDENT_REGISTRY;
+    else process.env.AUDIT_INCIDENT_REGISTRY = saved;
   });
 });

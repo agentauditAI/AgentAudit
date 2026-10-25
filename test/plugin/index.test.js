@@ -41,6 +41,7 @@ const mockSdk = {
   getAddress:           jest.fn(),
   assertBatchAnchoring: jest.fn(),
   registerAgent:        jest.fn(),
+  reportIncident:       jest.fn(),
 };
 
 jest.mock("@agentauditai/sdk", () => {
@@ -70,7 +71,6 @@ beforeEach(() => {
   mockTx = { hash: "0xdeadbeef", wait: jest.fn().mockResolvedValue({}) };
 
   mockContract = {
-    registerIncident: jest.fn().mockResolvedValue(mockTx),
     recordMetric:     jest.fn().mockResolvedValue(mockTx),
     getBatchCount:    jest.fn().mockResolvedValue(3n),
   };
@@ -83,6 +83,7 @@ beforeEach(() => {
   mockSdk.commitBatch.mockImplementation(async () => ({ txHash: "0xbatchtx", batchIndex: batchIndex++ }));
   mockSdk.getAddress.mockReturnValue(SIGNER);
   mockSdk.assertBatchAnchoring.mockImplementation(() => {});
+  mockSdk.reportIncident.mockResolvedValue({ incidentId: 4, txHash: "0xincidenttx" });
   mockSdk.registerAgent.mockResolvedValue({ agentId: 0, txHash: "0xregtx", network: "Mantle Mainnet" });
 });
 
@@ -340,52 +341,115 @@ describe("REPORT_INCIDENT", () => {
       expect(await action().validate(runtime, message)).toBe(true);
     });
 
-    it("returns false when AUDIT_INCIDENT_REGISTRY is missing", async () => {
+    it("returns true without AUDIT_INCIDENT_REGISTRY — the network default is used", async () => {
       const saved = process.env.AUDIT_INCIDENT_REGISTRY;
       delete process.env.AUDIT_INCIDENT_REGISTRY;
+      expect(await action().validate(runtime, message)).toBe(true);
+      process.env.AUDIT_INCIDENT_REGISTRY = saved;
+    });
+
+    it("returns false when AUDIT_PRIVATE_KEY is missing", async () => {
+      const saved = process.env.AUDIT_PRIVATE_KEY;
+      delete process.env.AUDIT_PRIVATE_KEY;
+      expect(await action().validate(runtime, message)).toBe(false);
+      process.env.AUDIT_PRIVATE_KEY = saved;
+    });
+
+    it("returns false on an unknown network with no AUDIT_INCIDENT_REGISTRY", async () => {
+      const saved = process.env.AUDIT_INCIDENT_REGISTRY;
+      delete process.env.AUDIT_INCIDENT_REGISTRY;
+      process.env.AUDIT_NETWORK = "nonexistent";
       expect(await action().validate(runtime, message)).toBe(false);
       process.env.AUDIT_INCIDENT_REGISTRY = saved;
     });
   });
 
   describe("handler", () => {
-    it("calls registerIncident on the contract", async () => {
-      const result = await action().handler(runtime, message, {}, { severity: 2, description: "Critical failure" }, jest.fn());
+    it("calls sdk.reportIncident with mapped options", async () => {
+      const result = await action().handler(runtime, message, {}, {
+        severity: 2, harmType: "fundamental_rights_violation", affectedPersons: 12,
+        description: "Critical failure", evidenceHash: "ipfs://cid", occurredAt: 1700000000,
+      }, jest.fn());
       expect(result).toBe(true);
-      expect(mockContract.registerIncident).toHaveBeenCalledWith(
-        ethers.id("1"),
-        2,
-        "Critical failure",
-        ethers.keccak256(ethers.toUtf8Bytes("Critical failure")),
-        expect.any(Number)
-      );
+      expect(mockSdk.reportIncident).toHaveBeenCalledWith({
+        agentId: "1",
+        severity: "HIGH",
+        harmType: "FUNDAMENTAL_RIGHTS_VIOLATION",
+        affectedPersons: 12,
+        description: "Critical failure",
+        evidenceHash: "ipfs://cid",
+        occurredAt: 1700000000,
+      });
+    });
+
+    it("passes the AUDIT_INCIDENT_REGISTRY override to the SDK client", async () => {
+      await action().handler(runtime, message, {}, {}, jest.fn());
+      expect(sdk.AgentAudit).toHaveBeenCalledWith(expect.objectContaining({ incidentRegistryAddress: "0xincidentregistry" }));
+    });
+
+    it("leaves the registry to the SDK network default when AUDIT_INCIDENT_REGISTRY is unset", async () => {
+      const saved = process.env.AUDIT_INCIDENT_REGISTRY;
+      delete process.env.AUDIT_INCIDENT_REGISTRY;
+      await action().handler(runtime, message, {}, {}, jest.fn());
+      expect(sdk.AgentAudit).toHaveBeenCalledWith(expect.objectContaining({ incidentRegistryAddress: undefined }));
+      process.env.AUDIT_INCIDENT_REGISTRY = saved;
+    });
+
+    it("defaults: MEDIUM severity, OTHER harm type, 0 affected persons, message text as description", async () => {
+      await action().handler(runtime, { content: { text: "agent went rogue" } }, {}, {}, jest.fn());
+      expect(mockSdk.reportIncident).toHaveBeenCalledWith(expect.objectContaining({
+        severity: "MEDIUM", harmType: "OTHER", affectedPersons: 0, description: "agent went rogue",
+        evidenceHash: undefined, occurredAt: undefined,
+      }));
+    });
+
+    it("severity 0 and harmType 0 map to LOW / DEATH (no || fallback)", async () => {
+      await action().handler(runtime, message, {}, { severity: 0, harmType: 0, affectedPersons: 0 }, jest.fn());
+      expect(mockSdk.reportIncident).toHaveBeenCalledWith(expect.objectContaining({
+        severity: "LOW", harmType: "DEATH", affectedPersons: 0,
+      }));
+    });
+
+    it("accepts severity by name, case-insensitive", async () => {
+      await action().handler(runtime, message, {}, { severity: "critical" }, jest.fn());
+      expect(mockSdk.reportIncident.mock.calls[0][0].severity).toBe("CRITICAL");
     });
 
     it("passes options.agentId through unchanged (bytes32)", async () => {
       const raw = "0x" + "ab".repeat(32);
       await action().handler(runtime, message, {}, { agentId: raw }, jest.fn());
-      expect(mockContract.registerIncident.mock.calls[0][0]).toBe(raw);
+      expect(mockSdk.reportIncident.mock.calls[0][0].agentId).toBe(raw);
     });
 
-    it("callback text includes severity label and tx hash", async () => {
+    it("rejects an invalid severity without calling the SDK", async () => {
       const cb = jest.fn();
-      await action().handler(runtime, message, {}, { severity: 2 }, cb);
-      const text = cb.mock.calls[0][0].text;
-      expect(text).toMatch(/HIGH/i);
-      expect(cb.mock.calls[0][0].txHash).toBe("0xdeadbeef");
+      expect(await action().handler(runtime, message, {}, { severity: 7 }, cb)).toBe(false);
+      expect(mockSdk.reportIncident).not.toHaveBeenCalled();
+      expect(cb.mock.calls[0][0].text).toMatch(/Invalid severity: 7/);
     });
 
-    it("defaults severity to 1 (MEDIUM) when not provided", async () => {
-      await action().handler(runtime, message, {}, {}, jest.fn());
-      expect(mockContract.registerIncident).toHaveBeenCalledWith(
-        expect.anything(), 1, expect.any(String), expect.any(String), expect.any(Number)
-      );
+    it("rejects an invalid harmType without calling the SDK", async () => {
+      const cb = jest.fn();
+      expect(await action().handler(runtime, message, {}, { harmType: "PAPERCUT" }, cb)).toBe(false);
+      expect(mockSdk.reportIncident).not.toHaveBeenCalled();
+      expect(cb.mock.calls[0][0].text).toMatch(/Invalid harmType: PAPERCUT/);
     });
 
-    it("returns false on error", async () => {
-      mockContract.registerIncident.mockRejectedValueOnce(new Error("registry error"));
-      const result = await action().handler(runtime, message, {}, {}, jest.fn());
-      expect(result).toBe(false);
+    it("callback carries incident id, labels, deadline and tx hash", async () => {
+      const cb = jest.fn();
+      await action().handler(runtime, message, {}, { severity: 3, harmType: 1, affectedPersons: 2 }, cb);
+      const payload = cb.mock.calls[0][0];
+      expect(payload).toMatchObject({ incidentId: 4, txHash: "0xincidenttx", severity: "CRITICAL", harmType: "SERIOUS_HEALTH_HARM" });
+      expect(payload.text).toMatch(/Incident #4/);
+      expect(payload.text).toMatch(/within 2 days/);
+      expect(payload.text).toMatch(/Affected persons: 2/);
+    });
+
+    it("returns false and reports the SDK error (e.g. no matching registry)", async () => {
+      mockSdk.reportIncident.mockRejectedValueOnce(new Error("IncidentRegistry v2 is not available on Base Mainnet"));
+      const cb = jest.fn();
+      expect(await action().handler(runtime, message, {}, {}, cb)).toBe(false);
+      expect(cb.mock.calls[0][0].text).toMatch(/IncidentRegistry v2 is not available/);
     });
   });
 });

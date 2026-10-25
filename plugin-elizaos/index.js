@@ -22,10 +22,6 @@ const DEFAULT_BATCH_DIR = "./agentaudit-batches";
 
 // ─── ABIs (contracts the SDK does not cover with identical semantics) ────────
 
-const INCIDENT_REGISTRY_ABI = [
-  "function registerIncident(bytes32 agentId, uint8 severity, string description, string evidenceHash, uint256 occurredAt) external returns (uint256 id)",
-];
-
 const POST_MARKET_MONITOR_ABI = [
   "function recordMetric(address agent, uint8 metricType, string metricName, int256 value, int256 threshold, string context, bytes32 txRef) external",
 ];
@@ -63,8 +59,9 @@ function getContext() {
   if (!key) throw new Error("AUDIT_PRIVATE_KEY not set");
   const network = getNetwork();
   const vaultOverride = process.env.AUDIT_VAULT_ADDRESS || undefined;
+  const incidentOverride = process.env.AUDIT_INCIDENT_REGISTRY || undefined;
   const batchDir = process.env.AUDIT_BATCH_DIR || DEFAULT_BATCH_DIR;
-  const id = [key, network.name, network.rpc, vaultOverride, batchDir].join("|");
+  const id = [key, network.name, network.rpc, vaultOverride, incidentOverride, batchDir].join("|");
   if (_ctx && _ctx.id === id) return _ctx;
 
   const sdk = new AgentAudit({
@@ -72,6 +69,7 @@ function getContext() {
     network: network.name,
     rpcUrl: network.rpc,
     auditVaultAddress: vaultOverride,
+    incidentRegistryAddress: incidentOverride,
   });
   _ctx = { id, sdk, network, batchDir, buffer: null };
   return _ctx;
@@ -96,6 +94,26 @@ function getBuffer() {
 function hashContent(content) {
   const str = typeof content === "string" ? content : canonicalize(content ?? null);
   return "sha256:" + sha256Hex(str);
+}
+
+/** IncidentRegistry v2 address: AUDIT_INCIDENT_REGISTRY, else the SDK's per-network default */
+function incidentRegistryAddress() {
+  try {
+    return process.env.AUDIT_INCIDENT_REGISTRY || getNetwork().incidentRegistry || null;
+  } catch {
+    return null;
+  }
+}
+
+const SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const HARM_TYPES = ["DEATH", "SERIOUS_HEALTH_HARM", "SIGNIFICANT_PROPERTY_DAMAGE", "FUNDAMENTAL_RIGHTS_VIOLATION", "OTHER"];
+
+/** Enum option as index (0..n-1) or name (case-insensitive) → name; undefined/null → fallback */
+function enumName(value, labels, fallback, field) {
+  if (value === undefined || value === null) return fallback;
+  if (Number.isInteger(value) && labels[value]) return labels[value];
+  if (typeof value === "string" && labels.includes(value.toUpperCase())) return value.toUpperCase();
+  throw new Error(`Invalid ${field}: ${value}. Use 0-${labels.length - 1} or ${labels.join(", ")}`);
 }
 
 function riskName(level) {
@@ -288,33 +306,43 @@ const agentAuditPlugin = {
     // ── Action 4: Report Incident (Art. 73) ────────────────────────────────
     {
       name: "REPORT_INCIDENT",
-      description: "Report an AI incident to the on-chain registry (Art. 73). Enforces 15/10/2 day reporting timelines.",
+      description: "Report an AI incident to the on-chain IncidentRegistry (Art. 73). Enforces 15/10/2 day reporting timelines.",
       similes: ["report incident", "incident report", "flag issue", "report problem", "art 73"],
 
       validate: async (runtime, message) => {
-        return !!process.env.AUDIT_PRIVATE_KEY && !!process.env.AUDIT_INCIDENT_REGISTRY;
+        return !!process.env.AUDIT_PRIVATE_KEY && !!incidentRegistryAddress();
       },
 
       handler: async (runtime, message, state, options, callback) => {
         try {
-          const { wallet } = getWallet();
-          const REGISTRY = process.env.AUDIT_INCIDENT_REGISTRY;
-          const contract = new ethers.Contract(REGISTRY, INCIDENT_REGISTRY_ABI, wallet);
+          const { sdk, network } = getContext();
 
-          const agentId     = options?.agentId     || ethers.id(process.env.AUDIT_AGENT_ID || "agent");
-          const severity    = options?.severity     || 1; // 0=LOW, 1=MEDIUM, 2=HIGH, 3=CRITICAL
-          const description = options?.description  || message.content?.text || "Incident reported";
-          const evidenceHash = options?.evidenceHash || ethers.keccak256(ethers.toUtf8Bytes(description));
-          const occurredAt  = options?.occurredAt   || Math.floor(Date.now() / 1000);
+          const severity        = enumName(options?.severity, SEVERITIES, "MEDIUM", "severity");
+          const harmType        = enumName(options?.harmType, HARM_TYPES, "OTHER", "harmType");
+          const affectedPersons = options?.affectedPersons ?? 0;
+          const description     = options?.description || message.content?.text || "Incident reported";
 
-          const tx = await contract.registerIncident(agentId, severity, description, evidenceHash, occurredAt);
-          await tx.wait();
+          // agentId: bytes32 hex is used as-is, anything else is keccak256-hashed
+          // by the SDK (so AUDIT_AGENT_ID=1 → ethers.id("1"), as in 1.1.0)
+          const result = await sdk.reportIncident({
+            agentId: options?.agentId || process.env.AUDIT_AGENT_ID || "agent",
+            severity,
+            harmType,
+            affectedPersons,
+            description,
+            evidenceHash: options?.evidenceHash,
+            occurredAt: options?.occurredAt,
+          });
 
-          log(`Incident reported | Severity: ${severity} | TX: ${tx.hash}`);
+          log(`Incident #${result.incidentId} reported | Severity: ${severity} | TX: ${result.txHash}`);
 
+          const deadline = { CRITICAL: "2 days", HIGH: "10 days" }[severity] || "15 days";
           if (callback) callback({
-            text: `✅ Incident registered on-chain.\nSeverity: ${["LOW","MEDIUM","HIGH","CRITICAL"][severity]}\nTX: ${tx.hash}\nArt. 73 timeline enforcement active.`,
-            txHash: tx.hash,
+            text: `✅ Incident #${result.incidentId} registered on-chain (${network.name}).\nSeverity: ${severity}\nHarm type: ${harmType}\nAffected persons: ${affectedPersons}\nTX: ${result.txHash}\nArt. 73§2: report to the authority within ${deadline} of occurrence.`,
+            incidentId: result.incidentId,
+            txHash: result.txHash,
+            severity,
+            harmType,
           });
 
           return true;
@@ -484,7 +512,7 @@ AUDIT_PRIVATE_KEY=0x...          # Agent wallet private key
 AUDIT_AGENT_ID=1                 # Your registered agent ID
 AUDIT_NETWORK=base               # mantle | base | arbitrum | optimism | polygon (batch anchoring: base)
 AUDIT_AUTO_LOG=false             # true = auto-log every action
-AUDIT_INCIDENT_REGISTRY=0x...   # IncidentRegistry contract address (Art. 73)
+AUDIT_INCIDENT_REGISTRY=         # optional: IncidentRegistry v2 address (Art. 73; default per network)
 AUDIT_MONITOR_ADDRESS=0x...     # PostMarketMonitor contract address (Art. 72)
 AUDIT_BATCH_DIR=./agentaudit-batches  # optional: where batch JSON files are written (hashes only)
 AUDIT_RPC_URL=                   # optional: override the network RPC URL

@@ -1,7 +1,7 @@
 "use strict";
 
 // Integration: ElizaOS plugin action → BatchBuffer → commitBatch on a real
-// AuditVault v2 (anvil) → verifyLog. Requires Foundry (`anvil`) and a
+// AuditVault v2 (anvil) → verifyLog; REPORT_INCIDENT → IncidentRegistry v2. Requires Foundry (`anvil`) and a
 // `forge build` artifact in out/; fails without them unless
 // AGENTAUDIT_SKIP_ANVIL=1 is set.
 
@@ -14,6 +14,7 @@ const { ethers } = require("ethers");
 // anvil default account #0 — public test key, never used outside local chains
 const KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const ARTIFACT = path.join(__dirname, "../../out/AuditVault.sol/AuditVault.json");
+const INCIDENT_ARTIFACT = path.join(__dirname, "../../out/IncidentRegistry.sol/IncidentRegistry.json");
 const PORT = 19545 + (process.pid % 1000);
 const RPC = `http://127.0.0.1:${PORT}`;
 
@@ -34,10 +35,11 @@ describeAnvil("ElizaOS plugin × AuditVault v2 on anvil", () => {
   let anvil;
   let provider;
   let vault;
+  let registry;
   let plugin;
   let batchDir;
   const savedEnv = {};
-  const ENV = ["AUDIT_PRIVATE_KEY", "AUDIT_NETWORK", "AUDIT_RPC_URL", "AUDIT_VAULT_ADDRESS", "AUDIT_AGENT_ID", "AUDIT_BATCH_DIR", "AUDIT_AUTO_LOG"];
+  const ENV = ["AUDIT_PRIVATE_KEY", "AUDIT_NETWORK", "AUDIT_RPC_URL", "AUDIT_VAULT_ADDRESS", "AUDIT_AGENT_ID", "AUDIT_BATCH_DIR", "AUDIT_AUTO_LOG", "AUDIT_INCIDENT_REGISTRY"];
 
   jest.setTimeout(60_000);
 
@@ -59,11 +61,14 @@ describeAnvil("ElizaOS plugin × AuditVault v2 on anvil", () => {
     if (!hasAnvil()) {
       throw new Error("anvil not found on PATH — install Foundry (https://getfoundry.sh) or set AGENTAUDIT_SKIP_ANVIL=1 to skip");
     }
-    if (!fs.existsSync(ARTIFACT)) throw new Error(`Missing ${ARTIFACT} — run \`forge build\` first`);
+    for (const f of [ARTIFACT, INCIDENT_ARTIFACT]) {
+      if (!fs.existsSync(f)) throw new Error(`Missing ${f} — run \`forge build\` first`);
+    }
     const artifact = JSON.parse(fs.readFileSync(ARTIFACT, "utf8"));
+    const incidentArtifact = JSON.parse(fs.readFileSync(INCIDENT_ARTIFACT, "utf8"));
 
     anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
-    provider = new ethers.JsonRpcProvider(RPC, undefined, { staticNetwork: true });
+    provider = new ethers.JsonRpcProvider(RPC, undefined, { staticNetwork: true, cacheTimeout: -1 });
     for (let i = 0; ; i++) {
       try {
         await provider.getBlockNumber();
@@ -80,6 +85,11 @@ describeAnvil("ElizaOS plugin × AuditVault v2 on anvil", () => {
     const vaultAddress = await deployed.getAddress();
     vault = new ethers.Contract(vaultAddress, artifact.abi, provider);
 
+    const reg = await new ethers.ContractFactory(incidentArtifact.abi, incidentArtifact.bytecode.object, deployer).deploy();
+    await reg.waitForDeployment();
+    const registryAddress = await reg.getAddress();
+    registry = new ethers.Contract(registryAddress, incidentArtifact.abi, provider);
+
     batchDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentaudit-plugin-anvil-"));
     for (const k of ENV) savedEnv[k] = process.env[k];
     Object.assign(process.env, {
@@ -89,6 +99,7 @@ describeAnvil("ElizaOS plugin × AuditVault v2 on anvil", () => {
       AUDIT_VAULT_ADDRESS: vaultAddress,
       AUDIT_AGENT_ID: "7",
       AUDIT_BATCH_DIR: batchDir,
+      AUDIT_INCIDENT_REGISTRY: registryAddress,
     });
     delete process.env.AUDIT_AUTO_LOG;
 
@@ -182,5 +193,44 @@ describeAnvil("ElizaOS plugin × AuditVault v2 on anvil", () => {
     expect(count).toBe("4");
     expect(pending).toBe(0);
     expect(text).toMatch(/Batch anchoring: available/);
+  });
+
+  it("REPORT_INCIDENT registers on IncidentRegistry v2; every field reads back", async () => {
+    const cb = jest.fn();
+    const ok = await action("REPORT_INCIDENT").handler(runtime, { content: { text: "chatbot leaked a customer's address" } }, {}, {
+      severity: "CRITICAL", harmType: 3, affectedPersons: 1, evidenceHash: "ipfs://bafyleak",
+    }, cb);
+    expect(ok).toBe(true);
+    const { incidentId, txHash } = cb.mock.calls[0][0];
+    expect(incidentId).toBe(1);
+    expect((await provider.getTransactionReceipt(txHash)).status).toBe(1);
+
+    const inc = await registry.incidents(incidentId);
+    expect(inc.agentId).toBe(ethers.id("7"));  // AUDIT_AGENT_ID, hashed as in 1.1.0
+    expect(Number(inc.severity)).toBe(3);      // CRITICAL
+    expect(Number(inc.harmType)).toBe(3);      // FUNDAMENTAL_RIGHTS_VIOLATION
+    expect(inc.description).toBe("chatbot leaked a customer's address");
+    expect(inc.evidenceHash).toBe("ipfs://bafyleak");
+    expect(inc.affectedPersons).toBe(1n);
+    expect(inc.reportedBy).toBe(signer);
+    expect([...(await registry.getAgentIncidents(ethers.id("7")))]).toEqual([1n]);
+  });
+
+  it("REPORT_INCIDENT with severity 0 / harmType 0 writes LOW / DEATH", async () => {
+    const cb = jest.fn();
+    await action("REPORT_INCIDENT").handler(runtime, { content: { text: "x" } }, {}, { severity: 0, harmType: 0 }, cb);
+    const inc = await registry.incidents(cb.mock.calls[0][0].incidentId);
+    expect(Number(inc.severity)).toBe(0);
+    expect(Number(inc.harmType)).toBe(0);
+    expect(inc.affectedPersons).toBe(0n);
+  });
+
+  it("REPORT_INCIDENT fails clearly when AUDIT_INCIDENT_REGISTRY is not a v2 registry", async () => {
+    const saved = process.env.AUDIT_INCIDENT_REGISTRY;
+    process.env.AUDIT_INCIDENT_REGISTRY = await vault.getAddress();
+    const cb = jest.fn();
+    expect(await action("REPORT_INCIDENT").handler(runtime, { content: { text: "x" } }, {}, {}, cb)).toBe(false);
+    process.env.AUDIT_INCIDENT_REGISTRY = saved;
+    expect(cb.mock.calls[0][0].text).toMatch(/IncidentRegistry v2 is not available on Base Mainnet: .* does not implement registerIncident/);
   });
 });
