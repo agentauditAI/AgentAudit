@@ -149,17 +149,20 @@ Extends `BaseCallbackHandler` — the idiomatic LangChain approach. Attach to an
 
 The plugin is a standalone CommonJS package — **do not modify it** without understanding its versioning separately from the rest of the repo.
 
-- Entry point: `plugin-elizaos/index.js`; exports `agentAuditPlugin` with `name`, `description`, `actions[]`, and `middleware`
-- Uses `ethers` directly (not the SDK) with its own network config and ABIs
-- Reads config from `AUDIT_*` env vars: `AUDIT_PRIVATE_KEY`, `AUDIT_NETWORK`, `AUDIT_AGENT_ID`, `AUDIT_INCIDENT_REGISTRY`, `AUDIT_MONITOR_ADDRESS`, `AUDIT_AUTO_LOG`
+- Entry point: `plugin-elizaos/index.js`; exports `agentAuditPlugin` with `name`, `description`, `actions[]`, `middleware`, and `batch` (`flush`/`close`/`pending`/`getInclusionProof`)
+- Depends on `@agentauditai/sdk` (^1.1.1): audit logging uses `BatchBuffer` + `commitBatch` (scope `agent_action:elizaos:record_hash:…`, `docs/EVIDENCE_SCHEMA.md` §2.5); `REGISTER_AGENT` uses the SDK; `REPORT_INCIDENT` / `RECORD_METRIC` still call their contracts via `ethers` (SDK equivalents re-hash `agentId` / re-encode `txRef`)
+- Reads config from `AUDIT_*` env vars: `AUDIT_PRIVATE_KEY`, `AUDIT_NETWORK`, `AUDIT_AGENT_ID`, `AUDIT_INCIDENT_REGISTRY`, `AUDIT_MONITOR_ADDRESS`, `AUDIT_AUTO_LOG`, `AUDIT_REGISTRATION_ADDRESS`; optional `AUDIT_BATCH_DIR`, `AUDIT_RPC_URL`, `AUDIT_VAULT_ADDRESS`
 - 6 actions: `REGISTER_AGENT`, `LOG_AUDIT`, `LOG_AUDIT_BATCH`, `REPORT_INCIDENT`, `RECORD_METRIC`, `AUDIT_STATUS`
-- **Known quirk**: `RECORD_METRIC` uses `options?.metricType || 3` — so `metricType: 0` silently falls back to `3` (uses `||` not `??`)
-- Middleware auto-logs every message when `AUDIT_AUTO_LOG=true`; failures are swallowed silently so the agent is never blocked
+- Batch anchoring works by default only on `base`; on other networks logging fails with the SDK's "Batch anchoring is not available…" error unless `AUDIT_VAULT_ADDRESS` is set
+- **Known quirk (TODO in `plugin-elizaos/CHANGELOG.md`)**: `RECORD_METRIC` uses `options?.metricType || 3` — so `metricType: 0` silently falls back to `3` (uses `||` not `??`); `REPORT_INCIDENT` `severity` has the same pattern
+- Middleware buffers an `AUTO_LOG` entry for every message when `AUDIT_AUTO_LOG=true` without awaiting it; failures are swallowed silently so the agent is never blocked
 
 ### Plugin test conventions (`test/plugin/index.test.js`)
 
-- CommonJS `.js` file — picked up by jest config via `**/test/plugin/**/*.test.js`; transformed by `babel-jest` (no ts-jest needed)
-- `ethers` is fully mocked via `jest.mock("ethers", () => ({ ethers: { ... } }))` — no real RPC calls
+- CommonJS `.js` file — picked up by jest config via `**/test/plugin/**/*.test.js`; `@agentauditai/sdk` is mapped to `sdk/src/index.ts` by `moduleNameMapper` in `jest.config.ts`
+- `ethers` is partially mocked (only `JsonRpcProvider` / `Wallet` / `Contract`, hashing stays real) and the SDK's `AgentAudit` client is mocked, so the real `BatchBuffer` runs — no real RPC calls
+- Call `plugin.batch._reset()` in `beforeEach`; point `AUDIT_BATCH_DIR` at a temp dir
+- `test/plugin/plugin.anvil.test.js` runs plugin actions against a real AuditVault v2 on anvil (same `AGENTAUDIT_SKIP_ANVIL` rule as the SDK anvil test)
 - Env vars are set at the top of the file (before `require`) so the plugin's load-time `console.warn` is suppressed
 - `mockContract` is rebuilt in `beforeEach` so each test starts with a clean mock
 - Action handlers are accessed by name: `plugin.actions.find(a => a.name === "LOG_AUDIT")`

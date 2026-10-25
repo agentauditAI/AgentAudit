@@ -2,71 +2,36 @@
 // @elizaos/plugin-agentaudit — EU AI Act compliance logging
 // Supports: Mantle, Base, Arbitrum One, Optimism, Polygon (5 networks)
 // Articles: 9, 11, 12, 13, 14, 19, 26, 50, 72, 73
+//
+// Audit logs are batch-anchored through @agentauditai/sdk: each logged action
+// becomes one action_ref (docs/EVIDENCE_SCHEMA.md), and a BatchBuffer anchors
+// one Merkle root per batch via AuditVault v2 commitBatch.
 
 const { ethers } = require("ethers");
+const {
+  AgentAudit,
+  NETWORKS,
+  BatchBuffer,
+  FileBatchStore,
+  canonicalize,
+  sha256Hex,
+} = require("@agentauditai/sdk");
 
-// ─── Network Config ───────────────────────────────────────────────────────────
+const PLUGIN_ID = "agentaudit-elizaos/1.1";
+const DEFAULT_BATCH_DIR = "./agentaudit-batches";
 
-const NETWORKS = {
-  mantle: {
-    rpc: "https://rpc.mantle.xyz",
-    chainId: 5000,
-    auditVault:    "0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b",
-    explorer:      "https://explorer.mantle.xyz",
-  },
-  base: {
-    rpc: "https://mainnet.base.org",
-    chainId: 8453,
-    auditVault:    "0xCeE831070aa9081422f30df5559c125aa47A75DB",
-    explorer:      "https://basescan.org",
-  },
-  arbitrum: {
-    rpc: "https://arb1.arbitrum.io/rpc",
-    chainId: 42161,
-    auditVault:    "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C",
-    explorer:      "https://arbiscan.io",
-  },
-  optimism: {
-    rpc: "https://mainnet.optimism.io",
-    chainId: 10,
-    auditVault:    "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C",
-    explorer:      "https://optimistic.etherscan.io",
-  },
-  polygon: {
-    rpc: "https://polygon-rpc.com",
-    chainId: 137,
-    auditVault:    "0x6fC00423Df95a7caf6fFFDD93169b5C01480de02",
-    explorer:      "https://polygonscan.com",
-  },
-};
-
-// ─── ABIs ─────────────────────────────────────────────────────────────────────
-
-const AUDIT_VAULT_ABI = [
-  "function logAction(uint256 agentId, string actionType, bytes32 payloadHash, uint8 riskLevel) external returns (uint256 logIndex)",
-  "function logActionBatch(uint256 agentId, string[] actionTypes, bytes32[] payloadHashes, uint8[] riskLevels) external returns (uint256[] logIndexes)",
-  "function getLogCount(uint256 agentId) external view returns (uint256)",
-  "function getLogs(uint256 agentId) external view returns (tuple(uint256 logIndex, string actionType, bytes32 payloadHash, uint8 riskLevel, uint256 timestamp)[])",
-];
-
-const AGENT_REGISTRATION_ABI = [
-  "function registerAgent(string name, string complianceLevel, uint256 spendLimit, address auditVault) external returns (uint256 agentId)",
-  "function revokeAgent(uint256 agentId) external",
-  "function isActive(uint256 agentId) external view returns (bool)",
-  "function agents(uint256) external view returns (string name, address operator, uint256 createdAt, string complianceLevel, uint256 spendLimit, address auditVault, bool revoked)",
-];
+// ─── ABIs (contracts the SDK does not cover with identical semantics) ────────
 
 const INCIDENT_REGISTRY_ABI = [
   "function registerIncident(bytes32 agentId, uint8 severity, string description, string evidenceHash, uint256 occurredAt) external returns (uint256 id)",
-  "function markReportedToAuthority(uint256 id) external",
-  "function isWithinDeadline(uint256 id) external view returns (bool)",
 ];
 
 const POST_MARKET_MONITOR_ABI = [
-  "function enroll(address agent, string systemName, string riskCategory, uint256 reviewIntervalDays) external",
   "function recordMetric(address agent, uint8 metricType, string metricName, int256 value, int256 threshold, string context, bytes32 txRef) external",
-  "function recordReview(address agent, int256 complianceScore, string notes) external",
-  "function isReviewDue(address agent) external view returns (bool due, uint256 overdueBySeconds)",
+];
+
+const AUDIT_VAULT_V2_READ_ABI = [
+  "function getBatchCount(address agentId) external view returns (uint256)",
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,7 +39,12 @@ const POST_MARKET_MONITOR_ABI = [
 function getNetwork() {
   const net = (process.env.AUDIT_NETWORK || "mantle").toLowerCase();
   if (!NETWORKS[net]) throw new Error(`Unknown network: ${net}. Use: ${Object.keys(NETWORKS).join(", ")}`);
-  return { name: net, ...NETWORKS[net] };
+  return {
+    ...NETWORKS[net],
+    name: net,
+    rpc: process.env.AUDIT_RPC_URL || NETWORKS[net].rpc,
+    auditVault: process.env.AUDIT_VAULT_ADDRESS || NETWORKS[net].auditVault,
+  };
 }
 
 function getWallet() {
@@ -85,14 +55,64 @@ function getWallet() {
   return { wallet: new ethers.Wallet(key, provider), network };
 }
 
-function hashPayload(content) {
-  const str = typeof content === "string" ? content : JSON.stringify(content);
-  return ethers.keccak256(ethers.toUtf8Bytes(str));
+// One SDK client + batch buffer per configuration; rebuilt if the env changes
+let _ctx = null;
+
+function getContext() {
+  const key = process.env.AUDIT_PRIVATE_KEY;
+  if (!key) throw new Error("AUDIT_PRIVATE_KEY not set");
+  const network = getNetwork();
+  const vaultOverride = process.env.AUDIT_VAULT_ADDRESS || undefined;
+  const batchDir = process.env.AUDIT_BATCH_DIR || DEFAULT_BATCH_DIR;
+  const id = [key, network.name, network.rpc, vaultOverride, batchDir].join("|");
+  if (_ctx && _ctx.id === id) return _ctx;
+
+  const sdk = new AgentAudit({
+    privateKey: key,
+    network: network.name,
+    rpcUrl: network.rpc,
+    auditVaultAddress: vaultOverride,
+  });
+  _ctx = { id, sdk, network, batchDir, buffer: null };
+  return _ctx;
 }
 
-function riskLevel(level) {
-  const map = { LOW: 0, MEDIUM: 1, HIGH: 2 };
-  return map[(level || "LOW").toUpperCase()] ?? 0;
+function getBuffer() {
+  const ctx = getContext();
+  if (!ctx.buffer) {
+    // Clear error on networks without AuditVault v2 (unless AUDIT_VAULT_ADDRESS is set)
+    ctx.sdk.assertBatchAnchoring();
+    ctx.buffer = new BatchBuffer({
+      committer: ctx.sdk,
+      agentAddress: ctx.sdk.getAddress(),
+      store: new FileBatchStore(ctx.batchDir),
+      onError: (err) => console.error("[AgentAudit] batch flush failed:", err.message),
+    });
+  }
+  return ctx.buffer;
+}
+
+/** sha256 of the message content — raw content never leaves the process */
+function hashContent(content) {
+  const str = typeof content === "string" ? content : canonicalize(content ?? null);
+  return "sha256:" + sha256Hex(str);
+}
+
+function riskName(level) {
+  const upper = (level || "LOW").toUpperCase();
+  return ["LOW", "MEDIUM", "HIGH"].includes(upper) ? upper : "LOW";
+}
+
+/** Hashed audit record + its preimage (scope §2.5 agent_action) */
+function auditEntry(agentId, actionType, risk, payloadHash) {
+  const record = { plugin: PLUGIN_ID, action_type: actionType, risk_level: risk, payload_hash: payloadHash };
+  const preimage = {
+    action_type: actionType,
+    agent_id: String(agentId),
+    scope: `agent_action:elizaos:record_hash:${sha256Hex(canonicalize(record))}`,
+    timestamp_ms: Date.now(),
+  };
+  return { preimage, record };
 }
 
 function log(msg) {
@@ -119,29 +139,29 @@ const agentAuditPlugin = {
 
       handler: async (runtime, message, state, options, callback) => {
         try {
-          const { wallet, network } = getWallet();
+          const key = process.env.AUDIT_PRIVATE_KEY;
+          if (!key) throw new Error("AUDIT_PRIVATE_KEY not set");
+          getNetwork(); // validate AUDIT_NETWORK
 
-          // Use AgentRegistration on Mantle (primary registry)
-          const mantleProvider = new ethers.JsonRpcProvider(NETWORKS.mantle.rpc);
-          const mantleWallet = wallet.connect(mantleProvider);
-          const REGISTRATION_ADDRESS = process.env.AUDIT_REGISTRATION_ADDRESS
-            || "0x68769980879414e8f264Ac15a87813E2ABaBaD6e";
+          // AgentRegistration lives on Mantle (primary registry)
+          const registry = new AgentAudit({
+            privateKey: key,
+            network: "mantle",
+            registrationAddress: process.env.AUDIT_REGISTRATION_ADDRESS || undefined,
+          });
 
-          const contract = new ethers.Contract(REGISTRATION_ADDRESS, AGENT_REGISTRATION_ABI, mantleWallet);
+          const { txHash } = await registry.registerAgent({
+            name:            options?.agentName  || runtime.agentId || "eliza-agent",
+            complianceLevel: options?.compliance || "limited",
+            spendLimit:      options?.spendLimit || undefined,
+            auditVault:      options?.auditVault || undefined,
+          });
 
-          const name           = options?.agentName      || runtime.agentId || "eliza-agent";
-          const complianceLevel = options?.compliance    || "limited";
-          const spendLimit     = options?.spendLimit     || ethers.parseEther("100");
-          const auditVault     = options?.auditVault     || NETWORKS.mantle.auditVault;
-
-          const tx = await contract.registerAgent(name, complianceLevel, spendLimit, auditVault);
-          const receipt = await tx.wait();
-
-          log(`Agent registered | TX: ${tx.hash} | Network: mantle`);
+          log(`Agent registered | TX: ${txHash} | Network: mantle`);
 
           if (callback) callback({
-            text: `✅ Agent registered on Mantle Mainnet.\nTX: ${tx.hash}\nExplorer: ${NETWORKS.mantle.explorer}/tx/${tx.hash}`,
-            txHash: tx.hash,
+            text: `✅ Agent registered on Mantle Mainnet.\nTX: ${txHash}\nExplorer: ${NETWORKS.mantle.explorer}/tx/${txHash}`,
+            txHash,
             network: "mantle",
           });
 
@@ -162,7 +182,7 @@ const agentAuditPlugin = {
     // ── Action 2: Log Action (Art. 12, 19, 50) ─────────────────────────────
     {
       name: "LOG_AUDIT",
-      description: "Log an agent action on-chain for EU AI Act compliance (Art. 12, 19, 50). Immutable tamper-proof record.",
+      description: "Log an agent action for EU AI Act compliance (Art. 12, 19, 50). Batch-anchored on-chain as a Merkle root; pass flush: true to anchor immediately.",
       similes: ["log action", "audit log", "compliance log", "record action", "log to blockchain"],
 
       validate: async (runtime, message) => {
@@ -171,24 +191,31 @@ const agentAuditPlugin = {
 
       handler: async (runtime, message, state, options, callback) => {
         try {
-          const { wallet, network } = getWallet();
-          const contract = new ethers.Contract(network.auditVault, AUDIT_VAULT_ABI, wallet);
+          const buffer = getBuffer();
+          const { network } = getContext();
 
           const agentId     = options?.agentId    || process.env.AUDIT_AGENT_ID;
           const actionType  = options?.actionType || "MESSAGE";
-          const risk        = riskLevel(options?.riskLevel);
-          const payloadHash = hashPayload(message.content);
+          const risk        = riskName(options?.riskLevel);
+          const payloadHash = hashContent(message.content);
 
-          const tx = await contract.logAction(agentId, actionType, payloadHash, risk);
-          await tx.wait();
+          const { preimage, record } = auditEntry(agentId, actionType, risk, payloadHash);
+          const { actionRef } = await buffer.add(preimage, record);
+          if (options?.flush) await buffer.flush();
 
-          log(`Action logged | ${actionType} | TX: ${tx.hash} | Network: ${network.name}`);
+          const proof = buffer.getInclusionProof(actionRef);
+          log(`Action ${proof ? "anchored" : "buffered"} | ${actionType} | ${actionRef} | Network: ${network.name}`);
 
           if (callback) callback({
-            text: `✅ Action logged on ${network.name}.\nAction: ${actionType}\nRisk: ${options?.riskLevel || "LOW"}\nTX: ${tx.hash}`,
-            txHash: tx.hash,
-            network: network.name,
+            text: proof
+              ? `✅ Action anchored on ${network.name}.\nAction: ${actionType}\nRisk: ${risk}\naction_ref: ${actionRef}\nTX: ${proof.txHash}`
+              : `✅ Action recorded for batch anchoring on ${network.name}.\nAction: ${actionType}\nRisk: ${risk}\naction_ref: ${actionRef}\nPending in batch: ${buffer.size}`,
+            actionRef,
             payloadHash,
+            network: network.name,
+            txHash: proof?.txHash,
+            batchId: proof?.batchId,
+            pending: buffer.size,
           });
 
           return true;
@@ -201,14 +228,14 @@ const agentAuditPlugin = {
 
       examples: [[
         { user: "user",  content: { text: "Transfer 100 USDC to 0x123..." } },
-        { user: "agent", content: { text: "Action logged to Base Mainnet. TX: 0xabc..." } },
+        { user: "agent", content: { text: "Action recorded for batch anchoring on base. action_ref: 0xabc..." } },
       ]],
     },
 
     // ── Action 3: Batch Log (Art. 12, 19) ─────────────────────────────────
     {
       name: "LOG_AUDIT_BATCH",
-      description: "Log multiple agent actions in a single tx for gas efficiency (Art. 12, 19).",
+      description: "Log multiple agent actions and anchor them now in a single commitBatch tx (Art. 12, 19).",
       similes: ["batch log", "log batch", "multi log", "bulk audit"],
 
       validate: async (runtime, message) => {
@@ -217,27 +244,31 @@ const agentAuditPlugin = {
 
       handler: async (runtime, message, state, options, callback) => {
         try {
-          const { wallet, network } = getWallet();
-          const contract = new ethers.Contract(network.auditVault, AUDIT_VAULT_ABI, wallet);
-
           const agentId = options?.agentId || process.env.AUDIT_AGENT_ID;
           const actions = options?.actions || [];
 
           if (!actions.length) throw new Error("No actions provided for batch log");
 
-          const actionTypes  = actions.map(a => a.type || "ACTION");
-          const payloadHashes = actions.map(a => hashPayload(a.payload || a));
-          const riskLevels   = actions.map(a => riskLevel(a.riskLevel));
+          const buffer = getBuffer();
+          const { network } = getContext();
 
-          const tx = await contract.logActionBatch(agentId, actionTypes, payloadHashes, riskLevels);
-          await tx.wait();
+          const actionRefs = [];
+          for (const a of actions) {
+            const actionType = a.type || "ACTION";
+            const { preimage, record } = auditEntry(agentId, actionType, riskName(a.riskLevel), hashContent(a.payload || a));
+            actionRefs.push((await buffer.add(preimage, record)).actionRef);
+          }
+          await buffer.flush();
 
-          log(`Batch logged | ${actions.length} actions | TX: ${tx.hash} | Network: ${network.name}`);
+          const proof = buffer.getInclusionProof(actionRefs[actionRefs.length - 1]);
+          log(`Batch anchored | ${actions.length} actions | TX: ${proof.txHash} | Network: ${network.name}`);
 
           if (callback) callback({
-            text: `✅ Batch logged ${actions.length} actions on ${network.name}.\nTX: ${tx.hash}`,
-            txHash: tx.hash,
+            text: `✅ Batch anchored ${actions.length} actions on ${network.name}.\nTX: ${proof.txHash}`,
+            txHash: proof.txHash,
+            batchId: proof.batchId,
             count: actions.length,
+            actionRefs,
           });
 
           return true;
@@ -250,7 +281,7 @@ const agentAuditPlugin = {
 
       examples: [[
         { user: "user",  content: { text: "Log my last 5 actions" } },
-        { user: "agent", content: { text: "5 actions logged to Arbitrum One. TX: 0xabc..." } },
+        { user: "agent", content: { text: "Batch anchored 5 actions on base. TX: 0xabc..." } },
       ]],
     },
 
@@ -266,14 +297,14 @@ const agentAuditPlugin = {
 
       handler: async (runtime, message, state, options, callback) => {
         try {
-          const { wallet, network } = getWallet();
+          const { wallet } = getWallet();
           const REGISTRY = process.env.AUDIT_INCIDENT_REGISTRY;
           const contract = new ethers.Contract(REGISTRY, INCIDENT_REGISTRY_ABI, wallet);
 
           const agentId     = options?.agentId     || ethers.id(process.env.AUDIT_AGENT_ID || "agent");
           const severity    = options?.severity     || 1; // 0=LOW, 1=MEDIUM, 2=HIGH, 3=CRITICAL
           const description = options?.description  || message.content?.text || "Incident reported";
-          const evidenceHash = options?.evidenceHash || hashPayload(description);
+          const evidenceHash = options?.evidenceHash || ethers.keccak256(ethers.toUtf8Bytes(description));
           const occurredAt  = options?.occurredAt   || Math.floor(Date.now() / 1000);
 
           const tx = await contract.registerIncident(agentId, severity, description, evidenceHash, occurredAt);
@@ -312,12 +343,12 @@ const agentAuditPlugin = {
 
       handler: async (runtime, message, state, options, callback) => {
         try {
-          const { wallet, network } = getWallet();
+          const { wallet } = getWallet();
           const MONITOR = process.env.AUDIT_MONITOR_ADDRESS;
           const contract = new ethers.Contract(MONITOR, POST_MARKET_MONITOR_ABI, wallet);
 
           const agent      = options?.agentAddress || wallet.address;
-          const metricType = options?.metricType   || 3; // 3 = COMPLIANCE_SCORE
+          const metricType = options?.metricType   || 3; // 3 = COMPLIANCE_SCORE (TODO: `||` turns 0 into 3 — see CHANGELOG)
           const metricName = options?.metricName   || "compliance_score";
           const value      = options?.value        || 9000;
           const threshold  = options?.threshold    || 8000;
@@ -351,7 +382,7 @@ const agentAuditPlugin = {
     // ── Action 6: Status Check ─────────────────────────────────────────────
     {
       name: "AUDIT_STATUS",
-      description: "Check AgentAudit AI status: log count, network, compliance score.",
+      description: "Check AgentAudit AI status: network, batch anchoring availability, batches on-chain, pending entries.",
       similes: ["audit status", "check compliance", "log count", "audit info"],
 
       validate: async (runtime, message) => {
@@ -360,16 +391,41 @@ const agentAuditPlugin = {
 
       handler: async (runtime, message, state, options, callback) => {
         try {
-          const { wallet, network } = getWallet();
-          const contract = new ethers.Contract(network.auditVault, AUDIT_VAULT_ABI, wallet);
-
+          const ctx = getContext();
+          const { network } = ctx;
           const agentId = options?.agentId || process.env.AUDIT_AGENT_ID;
-          const count = await contract.getLogCount(agentId);
+          const agentAddress = ctx.sdk.getAddress();
+          const pending = ctx.buffer ? ctx.buffer.size : 0;
 
-          const status = `AgentAudit AI Status\nNetwork: ${network.name}\nAgent ID: ${agentId}\nLogs on-chain: ${count.toString()}\nExplorer: ${network.explorer}`;
+          let available = true;
+          let anchoring = "available";
+          try {
+            ctx.sdk.assertBatchAnchoring();
+          } catch (e) {
+            available = false;
+            anchoring = `unavailable — ${e.message}`;
+          }
+
+          let count = null;
+          if (available) {
+            const provider = new ethers.JsonRpcProvider(network.rpc);
+            const vault = new ethers.Contract(network.auditVault, AUDIT_VAULT_V2_READ_ABI, provider);
+            count = (await vault.getBatchCount(agentAddress)).toString();
+          }
+
+          const status = [
+            "AgentAudit AI Status",
+            `Network: ${network.name}`,
+            `Agent ID: ${agentId}`,
+            `Agent address: ${agentAddress}`,
+            `Batch anchoring: ${anchoring}`,
+            `Batches on-chain: ${count ?? "n/a"}`,
+            `Pending in buffer: ${pending}`,
+            `Explorer: ${network.explorer}`,
+          ].join("\n");
 
           log(status);
-          if (callback) callback({ text: status, count: count.toString(), network: network.name });
+          if (callback) callback({ text: status, count, pending, network: network.name });
 
           return true;
         } catch (error) {
@@ -381,27 +437,40 @@ const agentAuditPlugin = {
 
       examples: [[
         { user: "user",  content: { text: "What's the audit status?" } },
-        { user: "agent", content: { text: "AgentAudit AI Status\nNetwork: base\nLogs on-chain: 142" } },
+        { user: "agent", content: { text: "AgentAudit AI Status\nNetwork: base\nBatches on-chain: 12" } },
       ]],
     },
   ],
 
   // ── Auto-log middleware ────────────────────────────────────────────────────
-  // Attach to runtime to auto-log every agent action
+  // Attach to runtime to auto-log every agent action. Never blocks the agent:
+  // the entry is buffered without awaiting, and failures are swallowed.
   middleware: async (runtime, message, state, next) => {
     if (process.env.AUDIT_AUTO_LOG === "true" && process.env.AUDIT_AGENT_ID) {
       try {
-        const { wallet, network } = getWallet();
-        const contract = new ethers.Contract(network.auditVault, AUDIT_VAULT_ABI, wallet);
-        const agentId = process.env.AUDIT_AGENT_ID;
-        const payloadHash = hashPayload(message.content);
-        const tx = await contract.logAction(agentId, "AUTO_LOG", payloadHash, 0);
-        log(`Auto-logged | TX: ${tx.hash}`);
+        const buffer = getBuffer();
+        const { preimage, record } = auditEntry(process.env.AUDIT_AGENT_ID, "AUTO_LOG", "LOW", hashContent(message.content));
+        buffer.add(preimage, record).catch(() => {});
+        log("Auto-logged (buffered for batch anchoring)");
       } catch (e) {
         // Silent fail — don't block agent
       }
     }
     return next();
+  },
+
+  // ── Batch control (not an ElizaOS action) ──────────────────────────────────
+  batch: {
+    /** Anchor everything buffered now */
+    flush: () => getBuffer().flush(),
+    /** Flush the remainder and stop the timer — call on shutdown */
+    close: async () => (_ctx && _ctx.buffer ? _ctx.buffer.close() : null),
+    /** { leaf, proof[], root, batchId, batchIndex, agentAddress, txHash } or null */
+    getInclusionProof: (actionRef) => (_ctx && _ctx.buffer ? _ctx.buffer.getInclusionProof(actionRef) : null),
+    /** Number of entries waiting for the next flush */
+    pending: () => (_ctx && _ctx.buffer ? _ctx.buffer.size : 0),
+    /** Test hook: drop the cached SDK client and buffer */
+    _reset: () => { _ctx = null; },
   },
 };
 
@@ -413,10 +482,13 @@ if (!process.env.AUDIT_PRIVATE_KEY) {
 
 AUDIT_PRIVATE_KEY=0x...          # Agent wallet private key
 AUDIT_AGENT_ID=1                 # Your registered agent ID
-AUDIT_NETWORK=base               # mantle | base | arbitrum | optimism | polygon
+AUDIT_NETWORK=base               # mantle | base | arbitrum | optimism | polygon (batch anchoring: base)
 AUDIT_AUTO_LOG=false             # true = auto-log every action
 AUDIT_INCIDENT_REGISTRY=0x...   # IncidentRegistry contract address (Art. 73)
 AUDIT_MONITOR_ADDRESS=0x...     # PostMarketMonitor contract address (Art. 72)
+AUDIT_BATCH_DIR=./agentaudit-batches  # optional: where batch JSON files are written (hashes only)
+AUDIT_RPC_URL=                   # optional: override the network RPC URL
+AUDIT_VAULT_ADDRESS=             # optional: AuditVault v2 address (enables batching on any network)
 `);
 }
 

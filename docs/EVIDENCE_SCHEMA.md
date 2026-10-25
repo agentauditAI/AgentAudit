@@ -121,6 +121,27 @@ Segments must not contain `:`. Percent-encode `%` as `%25` first, then `:` as
 `%3A` (e.g. model `bedrock:claude%v1` → `bedrock%3Aclaude%25v1`). Hash segments
 never need encoding.
 
+### 2.5 Agent action
+
+```
+agent_action:<source>:record_hash:<sha256>
+```
+
+| Segment | Meaning |
+|---|---|
+| `<source>` | Integration that logged the action (e.g. `elizaos`) |
+| `<sha256>` | SHA-256 of the JCS-canonicalized action record |
+
+For agent actions that are not a single LLM call — e.g. an ElizaOS message or
+a framework-level action. The record holds only hashes and labels:
+
+```json
+{ "plugin": "agentaudit-elizaos/1.1", "action_type": "TRANSFER", "risk_level": "HIGH", "payload_hash": "sha256:<hex>" }
+```
+
+`payload_hash` is SHA-256 of the message content (JCS-canonicalized if it is
+an object). The preimage `action_type` matches the record's `action_type`.
+
 ---
 
 ## 3. On-chain anchoring

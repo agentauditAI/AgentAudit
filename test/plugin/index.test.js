@@ -1,32 +1,58 @@
 "use strict";
 
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
 // ─── Env setup (before require so the plugin's load-time warn is suppressed) ─
+
+const BATCH_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "agentaudit-plugin-unit-"));
 
 process.env.AUDIT_PRIVATE_KEY     = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 process.env.AUDIT_NETWORK         = "mantle";
 process.env.AUDIT_AGENT_ID        = "1";
 process.env.AUDIT_INCIDENT_REGISTRY = "0xincidentregistry";
 process.env.AUDIT_MONITOR_ADDRESS   = "0xmonitoraddress";
+process.env.AUDIT_BATCH_DIR       = BATCH_DIR;
 
-// ─── Ethers mock ─────────────────────────────────────────────────────────────
+const SIGNER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
-jest.mock("ethers", () => ({
-  ethers: {
-    JsonRpcProvider: jest.fn(),
-    Wallet:          jest.fn(),
-    Contract:        jest.fn(),
-    keccak256:       jest.fn(),
-    toUtf8Bytes:     jest.fn(),
-    parseEther:      jest.fn(),
-    id:              jest.fn(),
-    ZeroHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-  },
-}));
+// ─── Mocks ───────────────────────────────────────────────────────────────────
+//
+// ethers: only the network-facing classes are mocked; hashing stays real so the
+// SDK's BatchBuffer / Merkle code runs for real.
+// @agentauditai/sdk: only the AgentAudit client (chain I/O) is mocked.
+
+jest.mock("ethers", () => {
+  const actual = jest.requireActual("ethers");
+  return {
+    ...actual,
+    ethers: {
+      ...actual.ethers,
+      JsonRpcProvider: jest.fn(),
+      Wallet:          jest.fn(),
+      Contract:        jest.fn(),
+    },
+  };
+});
+
+const mockSdk = {
+  commitBatch:          jest.fn(),
+  getAddress:           jest.fn(),
+  assertBatchAnchoring: jest.fn(),
+  registerAgent:        jest.fn(),
+};
+
+jest.mock("@agentauditai/sdk", () => {
+  const actual = jest.requireActual("@agentauditai/sdk");
+  return { ...actual, AgentAudit: jest.fn(() => mockSdk) };
+});
 
 // ─── Plugin require (after mocks are hoisted) ─────────────────────────────────
 
 const plugin = require("../../plugin-elizaos/index.js");
 const { ethers } = require("ethers");
+const sdk = require("@agentauditai/sdk");
 
 // ─── Shared mock state ────────────────────────────────────────────────────────
 
@@ -35,25 +61,33 @@ let mockContract;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  plugin.batch._reset();
+  process.env.AUDIT_NETWORK = "base";
+  delete process.env.AUDIT_RPC_URL;
+  delete process.env.AUDIT_VAULT_ADDRESS;
+  delete process.env.AUDIT_AUTO_LOG;
 
   mockTx = { hash: "0xdeadbeef", wait: jest.fn().mockResolvedValue({}) };
 
   mockContract = {
-    registerAgent:   jest.fn().mockResolvedValue(mockTx),
-    logAction:       jest.fn().mockResolvedValue(mockTx),
-    logActionBatch:  jest.fn().mockResolvedValue(mockTx),
-    getLogCount:     jest.fn().mockResolvedValue(42n),
     registerIncident: jest.fn().mockResolvedValue(mockTx),
-    recordMetric:    jest.fn().mockResolvedValue(mockTx),
+    recordMetric:     jest.fn().mockResolvedValue(mockTx),
+    getBatchCount:    jest.fn().mockResolvedValue(3n),
   };
 
   ethers.JsonRpcProvider.mockReturnValue({});
-  ethers.Wallet.mockReturnValue({ connect: jest.fn().mockReturnThis(), address: "0xwallet" });
+  ethers.Wallet.mockReturnValue({ address: SIGNER });
   ethers.Contract.mockReturnValue(mockContract);
-  ethers.keccak256.mockReturnValue("0xpayloadhash");
-  ethers.toUtf8Bytes.mockReturnValue(new Uint8Array());
-  ethers.parseEther.mockReturnValue(100n);
-  ethers.id.mockReturnValue("0xagentbytes32");
+
+  let batchIndex = 0;
+  mockSdk.commitBatch.mockImplementation(async () => ({ txHash: "0xbatchtx", batchIndex: batchIndex++ }));
+  mockSdk.getAddress.mockReturnValue(SIGNER);
+  mockSdk.assertBatchAnchoring.mockImplementation(() => {});
+  mockSdk.registerAgent.mockResolvedValue({ agentId: 0, txHash: "0xregtx", network: "Mantle Mainnet" });
+});
+
+afterAll(() => {
+  fs.rmSync(BATCH_DIR, { recursive: true, force: true });
 });
 
 // ─── Plugin shape ─────────────────────────────────────────────────────────────
@@ -64,8 +98,10 @@ describe("plugin shape", () => {
     expect(typeof plugin.description).toBe("string");
   });
 
-  it("exports 6 actions", () => {
-    expect(plugin.actions).toHaveLength(6);
+  it("exports the same 6 actions as 1.0.0", () => {
+    expect(plugin.actions.map((a) => a.name)).toEqual([
+      "REGISTER_AGENT", "LOG_AUDIT", "LOG_AUDIT_BATCH", "REPORT_INCIDENT", "RECORD_METRIC", "AUDIT_STATUS",
+    ]);
   });
 
   it("every action has name, validate, handler, examples", () => {
@@ -77,8 +113,11 @@ describe("plugin shape", () => {
     }
   });
 
-  it("exports middleware function", () => {
+  it("exports middleware function and batch controls", () => {
     expect(typeof plugin.middleware).toBe("function");
+    expect(typeof plugin.batch.flush).toBe("function");
+    expect(typeof plugin.batch.close).toBe("function");
+    expect(typeof plugin.batch.getInclusionProof).toBe("function");
   });
 });
 
@@ -89,6 +128,10 @@ const message = { content: { text: "Transfer 100 USDC" }, roomId: "room-1" };
 
 function getAction(name) {
   return plugin.actions.find((a) => a.name === name);
+}
+
+function readBatchFile(batchId) {
+  return JSON.parse(fs.readFileSync(path.join(BATCH_DIR, `${batchId}.json`), "utf8"));
 }
 
 // ─── REGISTER_AGENT ───────────────────────────────────────────────────────────
@@ -110,36 +153,35 @@ describe("REGISTER_AGENT", () => {
   });
 
   describe("handler", () => {
-    it("returns true on success", async () => {
+    it("registers via the SDK on Mantle and returns true", async () => {
       const result = await action().handler(runtime, message, {}, {}, jest.fn());
       expect(result).toBe(true);
+      expect(sdk.AgentAudit).toHaveBeenCalledWith(expect.objectContaining({ network: "mantle" }));
+      expect(mockSdk.registerAgent).toHaveBeenCalledWith({
+        name: "test-agent", complianceLevel: "limited", spendLimit: undefined, auditVault: undefined,
+      });
     });
 
-    it("calls registerAgent on the contract", async () => {
+    it("passes AUDIT_REGISTRATION_ADDRESS to the SDK", async () => {
+      process.env.AUDIT_REGISTRATION_ADDRESS = "0xRegistry";
       await action().handler(runtime, message, {}, {}, jest.fn());
-      expect(mockContract.registerAgent).toHaveBeenCalledTimes(1);
+      expect(sdk.AgentAudit).toHaveBeenCalledWith(expect.objectContaining({ registrationAddress: "0xRegistry" }));
+      delete process.env.AUDIT_REGISTRATION_ADDRESS;
     });
 
     it("calls callback with txHash and network", async () => {
       const cb = jest.fn();
       await action().handler(runtime, message, {}, {}, cb);
-      expect(cb).toHaveBeenCalledWith(
-        expect.objectContaining({ txHash: "0xdeadbeef", network: "mantle" })
-      );
+      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ txHash: "0xregtx", network: "mantle" }));
     });
 
-    it("uses agentName from options when provided", async () => {
-      await action().handler(runtime, message, {}, { agentName: "my-bot" }, jest.fn());
-      expect(mockContract.registerAgent).toHaveBeenCalledWith(
-        "my-bot",
-        expect.any(String),
-        expect.anything(),
-        expect.any(String)
-      );
+    it("uses options when provided", async () => {
+      await action().handler(runtime, message, {}, { agentName: "my-bot", compliance: "high", spendLimit: 5n, auditVault: "0xVault" }, jest.fn());
+      expect(mockSdk.registerAgent).toHaveBeenCalledWith({ name: "my-bot", complianceLevel: "high", spendLimit: 5n, auditVault: "0xVault" });
     });
 
     it("returns false and calls callback on error", async () => {
-      mockContract.registerAgent.mockRejectedValueOnce(new Error("reverted"));
+      mockSdk.registerAgent.mockRejectedValueOnce(new Error("reverted"));
       const cb = jest.fn();
       const result = await action().handler(runtime, message, {}, {}, cb);
       expect(result).toBe(false);
@@ -167,51 +209,67 @@ describe("LOG_AUDIT", () => {
   });
 
   describe("handler", () => {
-    it("returns true on success", async () => {
-      const result = await action().handler(runtime, message, {}, {}, jest.fn());
-      expect(result).toBe(true);
+    it("buffers one action_ref without sending a transaction", async () => {
+      const cb = jest.fn();
+      expect(await action().handler(runtime, message, {}, {}, cb)).toBe(true);
+      expect(mockSdk.commitBatch).not.toHaveBeenCalled();
+      expect(plugin.batch.pending()).toBe(1);
+      const res = cb.mock.calls[0][0];
+      expect(res.actionRef).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(res.txHash).toBeUndefined();
+      expect(res.pending).toBe(1);
+      expect(res.network).toBe("base");
     });
 
-    it("calls logAction on the contract with agentId, actionType, payloadHash, riskLevel", async () => {
-      await action().handler(runtime, message, {}, { actionType: "TRANSFER", riskLevel: "HIGH" }, jest.fn());
-      expect(mockContract.logAction).toHaveBeenCalledWith(
-        process.env.AUDIT_AGENT_ID,
-        "TRANSFER",
-        "0xpayloadhash",
-        2 // HIGH = 2
-      );
-    });
-
-    it("defaults actionType to MESSAGE and riskLevel to LOW (0)", async () => {
-      await action().handler(runtime, message, {}, {}, jest.fn());
-      expect(mockContract.logAction).toHaveBeenCalledWith(
-        process.env.AUDIT_AGENT_ID,
-        "MESSAGE",
-        "0xpayloadhash",
-        0 // LOW = 0
-      );
-    });
-
-    it("uses MEDIUM risk level (1) correctly", async () => {
-      await action().handler(runtime, message, {}, { riskLevel: "MEDIUM" }, jest.fn());
-      expect(mockContract.logAction).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), 1
-      );
-    });
-
-    it("calls callback with txHash, network, and payloadHash", async () => {
+    it("payloadHash is sha256 of the canonical message content", async () => {
       const cb = jest.fn();
       await action().handler(runtime, message, {}, {}, cb);
-      expect(cb).toHaveBeenCalledWith(
-        expect.objectContaining({ txHash: "0xdeadbeef", payloadHash: "0xpayloadhash" })
-      );
+      expect(cb.mock.calls[0][0].payloadHash).toBe("sha256:" + sdk.sha256Hex(sdk.canonicalize(message.content)));
     });
 
-    it("returns false and calls callback on error", async () => {
-      mockContract.logAction.mockRejectedValueOnce(new Error("gas limit"));
+    it("flush: true anchors immediately and returns the tx", async () => {
       const cb = jest.fn();
-      const result = await action().handler(runtime, message, {}, {}, cb);
-      expect(result).toBe(false);
+      await action().handler(runtime, message, {}, { flush: true, actionType: "TRANSFER", riskLevel: "HIGH" }, cb);
+      expect(mockSdk.commitBatch).toHaveBeenCalledWith(expect.objectContaining({ agentAddress: SIGNER, eventCount: 1 }));
+      const res = cb.mock.calls[0][0];
+      expect(res.txHash).toBe("0xbatchtx");
+      expect(res.text).toMatch(/anchored/);
+    });
+
+    it("stores a hashes-only batch file with the agent_action scope", async () => {
+      const cb = jest.fn();
+      await action().handler(runtime, message, {}, { flush: true, actionType: "TRANSFER", riskLevel: "medium" }, cb);
+      const { actionRef, batchId, payloadHash } = cb.mock.calls[0][0];
+      const entry = readBatchFile(batchId).entries[0];
+
+      expect(entry.action_ref).toBe(actionRef);
+      expect(entry.record).toEqual({ plugin: "agentaudit-elizaos/1.1", action_type: "TRANSFER", risk_level: "MEDIUM", payload_hash: payloadHash });
+      expect(entry.preimage).toMatchObject({ action_type: "TRANSFER", agent_id: "1" });
+      expect(entry.preimage.scope).toBe(`agent_action:elizaos:record_hash:${sdk.sha256Hex(sdk.canonicalize(entry.record))}`);
+      expect(sdk.computeActionRef(entry.preimage)).toBe(actionRef);
+      expect(JSON.stringify(readBatchFile(batchId))).not.toContain("Transfer 100 USDC");
+    });
+
+    it("defaults actionType to MESSAGE and unknown risk levels to LOW", async () => {
+      const cb = jest.fn();
+      await action().handler(runtime, message, {}, { flush: true, riskLevel: "EXTREME" }, cb);
+      const entry = readBatchFile(cb.mock.calls[0][0].batchId).entries[0];
+      expect(entry.record).toMatchObject({ action_type: "MESSAGE", risk_level: "LOW" });
+    });
+
+    it("returns false with the SDK's clear error on a network without AuditVault v2", async () => {
+      mockSdk.assertBatchAnchoring.mockImplementation(() => {
+        throw new Error("Batch anchoring is not available on Mantle Mainnet");
+      });
+      const cb = jest.fn();
+      expect(await action().handler(runtime, message, {}, {}, cb)).toBe(false);
+      expect(cb).toHaveBeenCalledWith({ text: "AgentAudit error: Batch anchoring is not available on Mantle Mainnet" });
+    });
+
+    it("returns false and calls callback when the commit fails", async () => {
+      mockSdk.commitBatch.mockRejectedValueOnce(new Error("gas limit"));
+      const cb = jest.fn();
+      expect(await action().handler(runtime, message, {}, { flush: true }, cb)).toBe(false);
       expect(cb).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("gas limit") }));
     });
   });
@@ -234,33 +292,38 @@ describe("LOG_AUDIT_BATCH", () => {
   });
 
   describe("handler", () => {
-    it("calls logActionBatch with correct arrays", async () => {
-      await action().handler(runtime, message, {}, { actions }, jest.fn());
-      expect(mockContract.logActionBatch).toHaveBeenCalledWith(
-        process.env.AUDIT_AGENT_ID,
-        ["TRANSFER", "APPROVE"],
-        ["0xpayloadhash", "0xpayloadhash"],
-        [0, 2] // LOW=0, HIGH=2
-      );
+    it("anchors all actions in one commitBatch", async () => {
+      expect(await action().handler(runtime, message, {}, { actions }, jest.fn())).toBe(true);
+      expect(mockSdk.commitBatch).toHaveBeenCalledTimes(1);
+      expect(mockSdk.commitBatch).toHaveBeenCalledWith(expect.objectContaining({ eventCount: 2, agentAddress: SIGNER }));
+    });
+
+    it("records type and risk per action, hashes only", async () => {
+      const cb = jest.fn();
+      await action().handler(runtime, message, {}, { actions }, cb);
+      const batch = readBatchFile(cb.mock.calls[0][0].batchId);
+      expect(batch.entries.map((e) => [e.record.action_type, e.record.risk_level])).toEqual([["TRANSFER", "LOW"], ["APPROVE", "HIGH"]]);
+      expect(JSON.stringify(batch)).not.toContain("send 10 USDC");
     });
 
     it("returns false and errors when actions array is empty", async () => {
       const cb = jest.fn();
       const result = await action().handler(runtime, message, {}, { actions: [] }, cb);
       expect(result).toBe(false);
-      expect(cb).toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.stringContaining("No actions") })
-      );
+      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("No actions") }));
     });
 
-    it("calls callback with count on success", async () => {
+    it("calls callback with count, txHash and actionRefs", async () => {
       const cb = jest.fn();
       await action().handler(runtime, message, {}, { actions }, cb);
-      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ count: 2, txHash: "0xdeadbeef" }));
+      const res = cb.mock.calls[0][0];
+      expect(res).toMatchObject({ count: 2, txHash: "0xbatchtx" });
+      expect(res.actionRefs).toHaveLength(2);
+      for (const ref of res.actionRefs) expect(plugin.batch.getInclusionProof(ref)).not.toBeNull();
     });
 
-    it("returns false on contract error", async () => {
-      mockContract.logActionBatch.mockRejectedValueOnce(new Error("batch failed"));
+    it("returns false on commit error", async () => {
+      mockSdk.commitBatch.mockRejectedValueOnce(new Error("batch failed"));
       const result = await action().handler(runtime, message, {}, { actions }, jest.fn());
       expect(result).toBe(false);
     });
@@ -290,12 +353,18 @@ describe("REPORT_INCIDENT", () => {
       const result = await action().handler(runtime, message, {}, { severity: 2, description: "Critical failure" }, jest.fn());
       expect(result).toBe(true);
       expect(mockContract.registerIncident).toHaveBeenCalledWith(
-        expect.anything(),
+        ethers.id("1"),
         2,
         "Critical failure",
-        expect.any(String),
+        ethers.keccak256(ethers.toUtf8Bytes("Critical failure")),
         expect.any(Number)
       );
+    });
+
+    it("passes options.agentId through unchanged (bytes32)", async () => {
+      const raw = "0x" + "ab".repeat(32);
+      await action().handler(runtime, message, {}, { agentId: raw }, jest.fn());
+      expect(mockContract.registerIncident.mock.calls[0][0]).toBe(raw);
     });
 
     it("callback text includes severity label and tx hash", async () => {
@@ -344,7 +413,7 @@ describe("RECORD_METRIC", () => {
       const result = await action().handler(runtime, message, {}, {}, jest.fn());
       expect(result).toBe(true);
       expect(mockContract.recordMetric).toHaveBeenCalledWith(
-        expect.any(String), // agent address
+        SIGNER,             // wallet address
         3,                  // COMPLIANCE_SCORE
         "compliance_score",
         9000,
@@ -354,18 +423,24 @@ describe("RECORD_METRIC", () => {
       );
     });
 
-    it("uses options values when provided", async () => {
-      // metricType uses ||, so 0 would fall back to the default — use a truthy value
+    it("uses options values when provided, passing txRef through unchanged", async () => {
+      const txRef = "0x" + "cd".repeat(32);
       await action().handler(runtime, message, {}, {
         metricType: 1,
         metricName: "error_rate",
         value: 150,
         threshold: 200,
         context: "prod-v2",
+        txRef,
       }, jest.fn());
       expect(mockContract.recordMetric).toHaveBeenCalledWith(
-        expect.any(String), 1, "error_rate", 150, 200, "prod-v2", ethers.ZeroHash
+        expect.any(String), 1, "error_rate", 150, 200, "prod-v2", txRef
       );
+    });
+
+    it("known quirk (TODO): metricType 0 falls back to 3 because of ||", async () => {
+      await action().handler(runtime, message, {}, { metricType: 0 }, jest.fn());
+      expect(mockContract.recordMetric.mock.calls[0][1]).toBe(3);
     });
 
     it("calls callback with metric name and value", async () => {
@@ -395,27 +470,41 @@ describe("AUDIT_STATUS", () => {
   });
 
   describe("handler", () => {
-    it("calls getLogCount on the contract", async () => {
-      await action().handler(runtime, message, {}, {}, jest.fn());
-      expect(mockContract.getLogCount).toHaveBeenCalledTimes(1);
+    it("reads getBatchCount for the signer address from the v2 vault", async () => {
+      const cb = jest.fn();
+      expect(await action().handler(runtime, message, {}, {}, cb)).toBe(true);
+      expect(ethers.Contract).toHaveBeenCalledWith(sdk.NETWORKS.base.auditVault, expect.any(Array), expect.anything());
+      expect(mockContract.getBatchCount).toHaveBeenCalledWith(SIGNER);
+      const { text, count, network, pending } = cb.mock.calls[0][0];
+      expect(count).toBe("3");
+      expect(network).toBe("base");
+      expect(pending).toBe(0);
+      expect(text).toMatch(/Batch anchoring: available/);
+      expect(text).toMatch(/Batches on-chain: 3/);
     });
 
-    it("callback includes log count, agent id, and network", async () => {
+    it("reports pending entries in the buffer", async () => {
+      await getAction("LOG_AUDIT").handler(runtime, message, {}, {}, jest.fn());
       const cb = jest.fn();
       await action().handler(runtime, message, {}, {}, cb);
-      const { text, count, network } = cb.mock.calls[0][0];
-      expect(text).toMatch(/42/);
-      expect(count).toBe("42");
-      expect(network).toBe("mantle");
+      expect(cb.mock.calls[0][0].pending).toBe(1);
     });
 
-    it("returns true on success", async () => {
-      const result = await action().handler(runtime, message, {}, {}, jest.fn());
-      expect(result).toBe(true);
+    it("on a network without AuditVault v2: still succeeds and says batching is unavailable", async () => {
+      process.env.AUDIT_NETWORK = "mantle";
+      mockSdk.assertBatchAnchoring.mockImplementation(() => {
+        throw new Error("Batch anchoring is not available on Mantle Mainnet");
+      });
+      const cb = jest.fn();
+      expect(await action().handler(runtime, message, {}, {}, cb)).toBe(true);
+      expect(mockContract.getBatchCount).not.toHaveBeenCalled();
+      const { text, count } = cb.mock.calls[0][0];
+      expect(count).toBeNull();
+      expect(text).toMatch(/Batch anchoring: unavailable — Batch anchoring is not available on Mantle Mainnet/);
     });
 
-    it("returns false on error", async () => {
-      mockContract.getLogCount.mockRejectedValueOnce(new Error("rpc error"));
+    it("returns false on rpc error", async () => {
+      mockContract.getBatchCount.mockRejectedValueOnce(new Error("rpc error"));
       const result = await action().handler(runtime, message, {}, {}, jest.fn());
       expect(result).toBe(false);
     });
@@ -432,56 +521,74 @@ describe("middleware", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it("does not call logAction when AUDIT_AUTO_LOG is not set", async () => {
-    delete process.env.AUDIT_AUTO_LOG;
+  it("does not buffer anything when AUDIT_AUTO_LOG is not set", async () => {
     await plugin.middleware(runtime, message, {}, next);
-    expect(mockContract.logAction).not.toHaveBeenCalled();
+    expect(plugin.batch.pending()).toBe(0);
   });
 
-  it("calls logAction when AUDIT_AUTO_LOG=true and AUDIT_AGENT_ID is set", async () => {
+  it("buffers an AUTO_LOG entry when AUDIT_AUTO_LOG=true and AUDIT_AGENT_ID is set", async () => {
     process.env.AUDIT_AUTO_LOG = "true";
     await plugin.middleware(runtime, message, {}, next);
-    expect(mockContract.logAction).toHaveBeenCalledWith(
-      process.env.AUDIT_AGENT_ID,
-      "AUTO_LOG",
-      "0xpayloadhash",
-      0
-    );
-    delete process.env.AUDIT_AUTO_LOG;
+    expect(plugin.batch.pending()).toBe(1);
+    const result = await plugin.batch.flush();
+    const entry = readBatchFile(result.batchId).entries[0];
+    expect(entry.record).toMatchObject({ action_type: "AUTO_LOG", risk_level: "LOW" });
   });
 
-  it("still calls next() even if auto-log chain call fails silently", async () => {
+  it("still calls next() when batch anchoring is unavailable", async () => {
     process.env.AUDIT_AUTO_LOG = "true";
-    mockContract.logAction.mockRejectedValueOnce(new Error("chain down"));
+    mockSdk.assertBatchAnchoring.mockImplementation(() => { throw new Error("not v2"); });
     await expect(plugin.middleware(runtime, message, {}, next)).resolves.not.toThrow();
     expect(next).toHaveBeenCalledTimes(1);
-    delete process.env.AUDIT_AUTO_LOG;
+  });
+
+  it("does not wait for buffering (a hanging add/flush never blocks the agent)", async () => {
+    process.env.AUDIT_AUTO_LOG = "true";
+    const spy = jest.spyOn(sdk.BatchBuffer.prototype, "add").mockReturnValue(new Promise(() => {}));
+    await plugin.middleware(runtime, message, {}, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
+  it("swallows a rejected add (e.g. failed flush) without surfacing it", async () => {
+    process.env.AUDIT_AUTO_LOG = "true";
+    const spy = jest.spyOn(sdk.BatchBuffer.prototype, "add").mockRejectedValue(new Error("chain down"));
+    await expect(plugin.middleware(runtime, message, {}, next)).resolves.toBeUndefined();
+    await new Promise((r) => setImmediate(r));
+    expect(next).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });
 
 // ─── Network selection ────────────────────────────────────────────────────────
 
 describe("network selection", () => {
-  it("uses mantle RPC by default", async () => {
-    await getAction("LOG_AUDIT").handler(runtime, message, {}, {}, jest.fn());
-    expect(ethers.JsonRpcProvider).toHaveBeenCalledWith(
-      expect.stringContaining("mantle.xyz")
-    );
-  });
-
-  it("uses base RPC when AUDIT_NETWORK=base", async () => {
+  it("builds the SDK client for AUDIT_NETWORK with its default RPC", async () => {
     process.env.AUDIT_NETWORK = "base";
     await getAction("LOG_AUDIT").handler(runtime, message, {}, {}, jest.fn());
-    expect(ethers.JsonRpcProvider).toHaveBeenCalledWith(
-      expect.stringContaining("base.org")
-    );
-    process.env.AUDIT_NETWORK = "mantle";
+    expect(sdk.AgentAudit).toHaveBeenCalledWith(expect.objectContaining({
+      network: "base", rpcUrl: expect.stringContaining("base.org"), auditVaultAddress: undefined,
+    }));
   });
 
-  it("throws on unknown network", async () => {
+  it("defaults to mantle when AUDIT_NETWORK is unset", async () => {
+    delete process.env.AUDIT_NETWORK;
+    await getAction("AUDIT_STATUS").handler(runtime, message, {}, {}, jest.fn());
+    expect(sdk.AgentAudit).toHaveBeenCalledWith(expect.objectContaining({ network: "mantle" }));
+  });
+
+  it("honours AUDIT_RPC_URL and AUDIT_VAULT_ADDRESS", async () => {
+    process.env.AUDIT_RPC_URL = "http://127.0.0.1:8545";
+    process.env.AUDIT_VAULT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+    await getAction("LOG_AUDIT").handler(runtime, message, {}, {}, jest.fn());
+    expect(sdk.AgentAudit).toHaveBeenCalledWith(expect.objectContaining({
+      rpcUrl: "http://127.0.0.1:8545", auditVaultAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    }));
+  });
+
+  it("fails on unknown network", async () => {
     process.env.AUDIT_NETWORK = "ethereum";
     const result = await getAction("LOG_AUDIT").handler(runtime, message, {}, {}, jest.fn());
     expect(result).toBe(false);
-    process.env.AUDIT_NETWORK = "mantle";
   });
 });
