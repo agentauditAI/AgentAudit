@@ -529,7 +529,8 @@ export class AgentAudit implements BatchCommitter {
  * Create AgentAudit from environment variables
  */
 export function createAgentAudit(network: NetworkName = "base"): AgentAudit {
-  const privateKey = process.env.AUDIT_PRIVATE_KEY;
+  // AGENT_AUDIT_PRIVATE_KEY: deprecated name from the 1.0.x README, still accepted
+  const privateKey = process.env.AUDIT_PRIVATE_KEY ?? process.env.AGENT_AUDIT_PRIVATE_KEY;
   if (!privateKey) throw new Error("AUDIT_PRIVATE_KEY env var required");
 
   return new AgentAudit({

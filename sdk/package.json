@@ -1,14 +1,71 @@
 {
   "name": "@agentauditai/sdk",
-  "version": "1.0.1",
-  "description": "On-chain EU AI Act compliance SDK for AI agents — immutable audit logs, KYA registration, incident reporting, post-market monitoring.",
+  "version": "1.1.0",
+  "description": "On-chain EU AI Act compliance SDK for AI agents \u2014 immutable audit logs, KYA registration, incident reporting, post-market monitoring.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./openai": {
+      "types": "./dist/openai.d.ts",
+      "default": "./dist/openai.js"
+    },
+    "./anthropic": {
+      "types": "./dist/anthropic.d.ts",
+      "default": "./dist/anthropic.js"
+    },
+    "./langchain": {
+      "types": "./dist/langchain.d.ts",
+      "default": "./dist/langchain.js"
+    },
+    "./batch": {
+      "types": "./dist/batch.d.ts",
+      "default": "./dist/batch.js"
+    },
+    "./AgentAuditHandler": {
+      "types": "./dist/AgentAuditHandler.d.ts",
+      "default": "./dist/AgentAuditHandler.js"
+    },
+    "./dist/*.js": "./dist/*.js",
+    "./dist/*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "openai": [
+        "dist/openai.d.ts"
+      ],
+      "anthropic": [
+        "dist/anthropic.d.ts"
+      ],
+      "langchain": [
+        "dist/langchain.d.ts"
+      ],
+      "batch": [
+        "dist/batch.d.ts"
+      ],
+      "AgentAuditHandler": [
+        "dist/AgentAuditHandler.d.ts"
+      ],
+      "dist/*": [
+        "dist/*"
+      ]
+    }
+  },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc"
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
     "eu-ai-act",

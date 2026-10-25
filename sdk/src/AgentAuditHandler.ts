@@ -10,7 +10,7 @@ import { ethers } from "ethers";
 
 const NETWORKS = {
   mantle:   { rpc: "https://rpc.mantle.xyz",          auditVault: "0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b" },
-  base:     { rpc: "https://mainnet.base.org",         auditVault: "0x556C4275EE68869C6874C343d0Cb7Fc3C8910873" },
+  base:     { rpc: "https://mainnet.base.org",         auditVault: "0xCeE831070aa9081422f30df5559c125aa47A75DB" },
   arbitrum: { rpc: "https://arb1.arbitrum.io/rpc",     auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" },
   optimism: { rpc: "https://mainnet.optimism.io",      auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" },
   polygon:  { rpc: "https://polygon-rpc.com",          auditVault: "0x6fC00423Df95a7caf6fFFDD93169b5C01480de02" },
