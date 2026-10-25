@@ -1,4 +1,4 @@
-import { AgentAudit, createAgentAudit, NETWORKS } from "../../sdk/src/index";
+import { AgentAudit, createAgentAudit, NETWORKS, resolveBatchBuffer } from "../../sdk/src/index";
 
 // anvil default account #0 — public test key
 const KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
@@ -49,10 +49,51 @@ describe("NETWORKS", () => {
     expect(NETWORKS.base.vaultVersion).toBe(2);
   });
 
-  it("commitBatch refuses a v1 network without an auditVaultAddress override", async () => {
+  it("only Base is marked AuditVault v2; Arbitrum/Optimism/Polygon are not v2, Mantle is v1", () => {
+    expect(NETWORKS.mantle.vaultVersion).toBe(1);
+    expect(NETWORKS.arbitrum.vaultVersion).toBeNull();
+    expect(NETWORKS.optimism.vaultVersion).toBeNull();
+    expect(NETWORKS.polygon.vaultVersion).toBeNull();
+  });
+});
+
+describe("batch anchoring availability", () => {
+  const PARAMS = { agentAddress: ADDRESS, merkleRoot: "0x" + "11".repeat(32), contentURI: "x", eventCount: 1, complianceScore: 0 };
+
+  it("commitBatch refuses Mantle (v1) with a clear error", async () => {
     const sdk = new AgentAudit({ privateKey: KEY, network: "mantle" });
-    await expect(
-      sdk.commitBatch({ agentAddress: ADDRESS, merkleRoot: "0x" + "11".repeat(32), contentURI: "x", eventCount: 1, complianceScore: 0 })
-    ).rejects.toThrow("Mantle Mainnet AuditVault is v1 (no commitBatch)");
+    await expect(sdk.commitBatch(PARAMS)).rejects.toThrow(
+      "Batch anchoring is not available on Mantle Mainnet: the default AuditVault (0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b) is AuditVault v1 and has no commitBatch"
+    );
+  });
+
+  it.each([
+    ["arbitrum", "Arbitrum One"],
+    ["optimism", "Optimism Mainnet"],
+    ["polygon", "Polygon Mainnet"],
+  ] as const)("commitBatch refuses %s (not v2) with a clear error", async (network, name) => {
+    const sdk = new AgentAudit({ privateKey: KEY, network });
+    await expect(sdk.commitBatch(PARAMS)).rejects.toThrow(
+      `Batch anchoring is not available on ${name}: the default AuditVault (${NETWORKS[network].auditVault}) is not AuditVault v2 and has no commitBatch`
+    );
+  });
+
+  it("assertBatchAnchoring passes on Base and throws on non-v2 networks", () => {
+    expect(() => new AgentAudit({ privateKey: KEY, network: "base" }).assertBatchAnchoring()).not.toThrow();
+    expect(() => new AgentAudit({ privateKey: KEY, network: "arbitrum" }).assertBatchAnchoring()).toThrow(
+      "Pass auditVaultAddress pointing at an AuditVault v2 deployment"
+    );
+  });
+
+  it("auditVaultAddress override enables batch anchoring on any network", () => {
+    const sdk = new AgentAudit({ privateKey: KEY, network: "polygon", auditVaultAddress: ADDRESS });
+    expect(() => sdk.assertBatchAnchoring()).not.toThrow();
+  });
+
+  it("resolveBatchBuffer fails fast on a non-v2 network, works on Base", () => {
+    expect(() => resolveBatchBuffer(new AgentAudit({ privateKey: KEY, network: "optimism" }))).toThrow(
+      "Batch anchoring is not available on Optimism Mainnet"
+    );
+    expect(resolveBatchBuffer(new AgentAudit({ privateKey: KEY, network: "base" })).agentAddress).toBe(ADDRESS);
   });
 });

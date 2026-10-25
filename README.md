@@ -11,9 +11,13 @@
 |---|---|---|---|
 | Mantle Mainnet | AuditVault v1 | `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b` | 5000 |
 | Base | AuditVault v2 | `0xCeE831070aa9081422f30df5559c125aa47A75DB` | 8453 |
-| Arbitrum One | AuditVault v2 | `0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C` | 42161 |
-| Optimism | AuditVault v2 | `0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C` | 10 |
-| Polygon | AuditVault v2 | `0x6fC00423Df95a7caf6fFFDD93169b5C01480de02` | 137 |
+| Arbitrum One | AuditVault (not v2 — no `commitBatch`; source not in this repo) | `0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C` | 42161 |
+| Optimism | AuditVault (not v2 — no `commitBatch`; source not in this repo) | `0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C` | 10 |
+| Polygon | AuditVault (not v2 — no `commitBatch`; source not in this repo) | `0x6fC00423Df95a7caf6fFFDD93169b5C01480de02` | 137 |
+
+Only the Base and Robinhood Testnet contracts are AuditVault v2 (`contracts/v2/AuditVault.sol`) and
+support SDK batch anchoring. The Arbitrum/Optimism/Polygon contract shares some v2 read functions but has
+no `commitBatch(address,bytes32,string,uint256,uint8)`; see `sdk/README.md` → Supported Networks.
 
 ### Testnet
 

@@ -44,6 +44,12 @@ and the buffer anchors a single Merkle root per batch via AuditVault v2
 `commitBatch` — one transaction per batch instead of one per call. Only hashes
 are recorded; raw prompts and responses never leave your process.
 
+**Batch files hold hashes only.** Each stored batch (`FileBatchStore` writes one
+JSON file per batch) contains `action_ref`s, preimages (action type, agent id,
+a scope made of hashes, timestamp) and the hashed audit record (`prompt_hash`,
+`response_hash`, token counts, latency) — never prompt or response text. Keep
+the files anyway: auditors need them to recompute `action_ref`s and proofs.
+
 ```ts
 import { AuditedOpenAI } from "@agentauditai/sdk/openai";
 import { FileBatchStore } from "@agentauditai/sdk/batch";
@@ -78,7 +84,10 @@ if (flushed) {
 - `AuditedAnthropic` (`@agentauditai/sdk/anthropic`) and `AgentAuditCallbackHandler` /
   `withAudit()` (`@agentauditai/sdk/langchain`) take the same `mode` and `batch` options.
 - Pass one `BatchBuffer` as `batch: { buffer }` to share it across several clients.
-- `mode: "per_action"` restores the 1.0.x behaviour (one `logAction` call per request).
+- `mode: "per_action"` restores the 1.0.x behaviour (one `logAction` call per request) —
+  but see the known limitation below: it reverts on the deployed contracts.
+- Batch anchoring works on **Base** by default; see
+  [Supported Networks](#supported-networks) for the other chains.
 - Batches are committed under `batch.agentAddress` (default: the signer's address).
 - Verifiers: always recompute `action_ref` from the stored preimage and check the batch
   `submitter` — see the
@@ -162,13 +171,23 @@ console.log(`Review recorded: ${txHash}`);
 
 ## Supported Networks
 
-| Network | Chain ID | AuditVault | Batch anchoring |
-|---------|----------|------------|-----------------|
-| Base Mainnet | 8453 | v2 `0xCeE8…75DB` | ✅ |
-| Arbitrum One | 42161 | v2 `0x3057…450C` | ✅ |
-| Optimism Mainnet | 10 | v2 `0x3057…450C` | ✅ |
-| Polygon Mainnet | 137 | v2 `0x6fC0…de02` | ✅ |
-| Mantle Mainnet | 5000 | v1 `0xD008…054b` | needs `auditVaultAddress` (v2) |
+Batch anchoring (the wrappers' default mode) needs **AuditVault v2**
+(`commitBatch(address,bytes32,string,uint256,uint8)`). Status of the default
+AuditVault address on each network, checked against deployed bytecode:
+
+| Network | Chain ID | Default AuditVault | Contract | Batch anchoring today |
+|---------|----------|--------------------|----------|-----------------------|
+| Base Mainnet | 8453 | `0xCeE831070aa9081422f30df5559c125aa47A75DB` | AuditVault v2 (bytecode verified) | ✅ **Yes** |
+| Arbitrum One | 42161 | `0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C` | not AuditVault v2 — no `commitBatch` | ❌ No |
+| Optimism Mainnet | 10 | `0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C` | not AuditVault v2 — no `commitBatch` | ❌ No |
+| Polygon Mainnet | 137 | `0x6fC00423Df95a7caf6fFFDD93169b5C01480de02` | not AuditVault v2 — no `commitBatch` | ❌ No |
+| Mantle Mainnet | 5000 | `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b` | AuditVault v1 | ❌ No |
+
+On a ❌ network, creating a wrapper in batch mode throws immediately:
+`Batch anchoring is not available on <network>: …`. To anchor there anyway,
+pass `auditVaultAddress` pointing at an AuditVault v2 deployment on that chain.
+Registration, incident (Art. 73) and monitoring (Art. 72) methods are not
+affected by this table.
 
 ---
 

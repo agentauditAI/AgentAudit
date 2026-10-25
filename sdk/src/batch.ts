@@ -246,6 +246,8 @@ export interface CommitBatchResult {
 /** Anything that can call AuditVault v2 commitBatch — AgentAudit implements it */
 export interface BatchCommitter {
   commitBatch(params: CommitBatchParams): Promise<CommitBatchResult>;
+  /** Optional fail-fast check, called before a buffer is built for this committer */
+  assertBatchAnchoring?(): void;
 }
 
 export interface BatchBufferConfig {
@@ -462,6 +464,7 @@ export function resolveBatchBuffer(
   options: BatchOptions = {}
 ): BatchBuffer {
   if (options.buffer) return options.buffer;
+  sdk.assertBatchAnchoring?.();
   return new BatchBuffer({
     committer: sdk,
     agentAddress: options.agentAddress ?? sdk.getAddress(),

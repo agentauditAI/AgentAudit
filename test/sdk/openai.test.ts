@@ -327,6 +327,17 @@ describe("Batch mode", () => {
     expect(new AuditedOpenAI(CONFIG).buffer).toBeUndefined();
   });
 
+  it("fails at construction when the SDK cannot batch-anchor on its network", () => {
+    const { AgentAudit } = jest.requireMock("../../sdk/src/index");
+    AgentAudit.mockImplementationOnce(() => ({
+      logAction: mockLogAction,
+      commitBatch: mockCommitBatch,
+      getAddress: () => MOCK_SIGNER,
+      assertBatchAnchoring: () => { throw new Error("Batch anchoring is not available on Arbitrum One"); },
+    }));
+    expect(() => new AuditedOpenAI(BATCH_CONFIG)).toThrow("Batch anchoring is not available on Arbitrum One");
+  });
+
   it("flush commits under the signer address with an llm_call scope over the hashed record", async () => {
     mockCreate.mockResolvedValueOnce(CHAT_COMPLETION);
     const store = new MemoryBatchStore();

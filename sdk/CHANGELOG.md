@@ -2,6 +2,35 @@
 
 All notable changes to this package. Versions follow [SemVer](https://semver.org/).
 
+## 1.1.1 — 2026-10-25
+
+### Fixed
+- **Batch anchoring on networks without AuditVault v2.** 1.1.0 marked
+  Arbitrum One, Optimism and Polygon as AuditVault v2, but the contracts at
+  their default addresses (`0x3057…450C`, `0x6fC0…de02`) are a different
+  contract with no `commitBatch(address,bytes32,string,uint256,uint8)` —
+  batch commits there reverted. Those networks now have `vaultVersion: null`,
+  and creating a wrapper in batch mode (or calling `commitBatch`) on them
+  throws a clear error: `Batch anchoring is not available on <network>: …`.
+  Passing `auditVaultAddress` for an AuditVault v2 deployment still works.
+  **Base is the only network with batch anchoring by default.**
+- The Mantle (v1) error no longer suggests `mode: "per_action"`, which also
+  reverts on-chain.
+
+### Added
+- `AgentAudit.assertBatchAnchoring()`; wrappers call it at construction in
+  batch mode so misconfiguration fails fast instead of on the first flush.
+  `BatchCommitter.assertBatchAnchoring?()` is optional for custom committers.
+
+### Docs
+- README "Supported Networks" now lists, per network, the default AuditVault,
+  what contract it is, and whether batch anchoring works today.
+- README states that batch files hold hashes only.
+
+### Corrections to 1.1.0 notes
+- The 1.1.0 entry and README listed batch anchoring as available on Arbitrum,
+  Optimism and Polygon. That was wrong; only Base supports it by default.
+
 ## 1.1.0 — 2026-10-25
 
 ### Added

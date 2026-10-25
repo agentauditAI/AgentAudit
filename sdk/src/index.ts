@@ -9,6 +9,10 @@ import type { BatchCommitter, CommitBatchParams, CommitBatchResult } from "./bat
 export * from "./batch";
 
 // ─── Network Config ───────────────────────────────────────────────────────────
+//
+// vaultVersion: 1 = AuditVault v1, 2 = AuditVault v2 (verified bytecode),
+// null = a contract that is not AuditVault v2 (no commitBatch). Batch
+// anchoring works only where vaultVersion is 2, or with auditVaultAddress.
 
 export const NETWORKS = {
   mantle: {
@@ -31,7 +35,7 @@ export const NETWORKS = {
     rpc:        "https://arb1.arbitrum.io/rpc",
     chainId:    42161,
     auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C",
-    vaultVersion: 2,
+    vaultVersion: null, // not AuditVault v2 — no commitBatch (see README "Supported Networks")
     explorer:   "https://arbiscan.io",
     name:       "Arbitrum One",
   },
@@ -39,7 +43,7 @@ export const NETWORKS = {
     rpc:        "https://mainnet.optimism.io",
     chainId:    10,
     auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C",
-    vaultVersion: 2,
+    vaultVersion: null, // not AuditVault v2 — no commitBatch (see README "Supported Networks")
     explorer:   "https://optimistic.etherscan.io",
     name:       "Optimism Mainnet",
   },
@@ -47,7 +51,7 @@ export const NETWORKS = {
     rpc:        "https://polygon-rpc.com",
     chainId:    137,
     auditVault: "0x6fC00423Df95a7caf6fFFDD93169b5C01480de02",
-    vaultVersion: 2,
+    vaultVersion: null, // not AuditVault v2 — no commitBatch (see README "Supported Networks")
     explorer:   "https://polygonscan.com",
     name:       "Polygon Mainnet",
   },
@@ -190,9 +194,13 @@ export class AgentAudit implements BatchCommitter {
       const addr = this.config.auditVaultAddress
         ?? (this.network.vaultVersion === 2 ? this.network.auditVault : undefined);
       if (!addr) {
+        const what = this.network.vaultVersion === 1
+          ? "is AuditVault v1"
+          : "is not AuditVault v2";
         throw new Error(
-          `${this.network.name} AuditVault is v${this.network.vaultVersion} (no commitBatch). ` +
-          "Pass auditVaultAddress for a v2 deployment or use mode: \"per_action\"."
+          `Batch anchoring is not available on ${this.network.name}: the default AuditVault ` +
+          `(${this.network.auditVault}) ${what} and has no commitBatch. ` +
+          "Pass auditVaultAddress pointing at an AuditVault v2 deployment, or use network \"base\"."
         );
       }
       this._auditVaultV2 = new ethers.Contract(addr, AUDIT_VAULT_V2_ABI, this.wallet);
@@ -332,6 +340,15 @@ export class AgentAudit implements BatchCommitter {
       }
     }
     return { txHash: tx.hash, batchIndex };
+  }
+
+  /**
+   * Throw a descriptive error if this network/config cannot batch-anchor.
+   * Wrappers call it at construction so batch mode fails fast instead of on
+   * the first flush.
+   */
+  assertBatchAnchoring(): void {
+    void this.auditVaultV2;
   }
 
   /**
