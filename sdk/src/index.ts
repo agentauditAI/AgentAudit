@@ -56,7 +56,7 @@ export const NETWORKS = {
     name:       "Optimism Mainnet",
   },
   polygon: {
-    rpc:        "https://polygon-rpc.com",
+    rpc:        "https://polygon-bor-rpc.publicnode.com",
     chainId:    137,
     auditVault: "0x6fC00423Df95a7caf6fFFDD93169b5C01480de02",
     vaultVersion: null, // not AuditVault v2 — no commitBatch (see README "Supported Networks")

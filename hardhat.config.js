@@ -46,7 +46,7 @@ module.exports = {
       gasPrice: 2000000, // 0.002 gwei — outbids stuck txs on Optimism
     },
     polygon: {
-      url: process.env.POLYGON_RPC_URL || "https://polygon-rpc.com",
+      url: process.env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com",
       accounts,
       chainId: 137,
     },

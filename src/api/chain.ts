@@ -6,7 +6,7 @@ const RPC_URLS: Record<Network, string> = {
   base:     process.env.RPC_BASE     || "https://mainnet.base.org",
   arbitrum: process.env.RPC_ARBITRUM || "https://arb1.arbitrum.io/rpc",
   optimism: process.env.RPC_OPTIMISM || "https://mainnet.optimism.io",
-  polygon:  process.env.RPC_POLYGON  || "https://polygon-rpc.com",
+  polygon:  process.env.RPC_POLYGON  || "https://polygon-bor-rpc.publicnode.com",
 };
 
 // Contract addresses per network — set via env vars, fallback to known Mantle mainnet values

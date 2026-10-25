@@ -9,11 +9,11 @@ import { ethers } from "ethers";
 // ─── Network Config ───────────────────────────────────────────────────────────
 
 const NETWORKS = {
-  mantle:   { rpc: "https://rpc.mantle.xyz",          auditVault: "0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b" },
-  base:     { rpc: "https://mainnet.base.org",         auditVault: "0xCeE831070aa9081422f30df5559c125aa47A75DB" },
-  arbitrum: { rpc: "https://arb1.arbitrum.io/rpc",     auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" },
-  optimism: { rpc: "https://mainnet.optimism.io",      auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" },
-  polygon:  { rpc: "https://polygon-rpc.com",          auditVault: "0x6fC00423Df95a7caf6fFFDD93169b5C01480de02" },
+  mantle:   { rpc: "https://rpc.mantle.xyz",                  auditVault: "0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b" },
+  base:     { rpc: "https://mainnet.base.org",                auditVault: "0xCeE831070aa9081422f30df5559c125aa47A75DB" },
+  arbitrum: { rpc: "https://arb1.arbitrum.io/rpc",            auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" },
+  optimism: { rpc: "https://mainnet.optimism.io",             auditVault: "0x30579c6bFe4401A4b07062f0cc13C08FF2D9450C" },
+  polygon:  { rpc: "https://polygon-bor-rpc.publicnode.com",  auditVault: "0x6fC00423Df95a7caf6fFFDD93169b5C01480de02" },
 };
 
 const AUDIT_VAULT_ABI = [

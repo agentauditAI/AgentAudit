@@ -61,7 +61,7 @@ NETWORKS: Dict[str, NetworkConfig] = {
     },
     "polygon": {
         "chain_id": 137,
-        "rpc_url": "https://polygon-rpc.com",
+        "rpc_url": "https://polygon-bor-rpc.publicnode.com",
         "explorer": "https://polygonscan.com",
         "contracts": {
             "AuditVault": "0x6B5BebC2f9172c6E17Df5ea59C1753D360866bDB",

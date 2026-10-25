@@ -27,6 +27,9 @@ All notable changes to this package. Versions follow [SemVer](https://semver.org
 - The default `occurredAt` is now the latest block timestamp instead of
   `Date.now()`, which could be ahead of block time, and the registry reverts with
   `FutureTimestamp` when `occurredAt` is in the future.
+- **Polygon default RPC.** `https://polygon-rpc.com` now returns
+  `401 "API key disabled, tenant disabled"` for every request. The default is now
+  `https://polygon-bor-rpc.publicnode.com`; `rpcUrl` still overrides it.
 
 ### Added
 - `reportIncident()` params `harmType` (`DEATH` | `SERIOUS_HEALTH_HARM` |
