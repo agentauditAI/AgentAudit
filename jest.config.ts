@@ -14,6 +14,9 @@ const config: Config = {
   // it against the local SDK source instead.
   moduleNameMapper: {
     "^@agentauditai/sdk$": "<rootDir>/sdk/src/index.ts",
+    // A nested node_modules (e.g. after `npm install` in plugin-elizaos/) would
+    // load a second, unmocked ethers; pin every import to the root copy.
+    "^ethers$": "<rootDir>/node_modules/ethers",
   },
   transform: {
     // ethers v6 types use #privateField syntax that trips ts-jest diagnostics;
