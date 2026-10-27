@@ -40,7 +40,12 @@ jobs:
       - name: npm ci
         run: npm ci
 
-      # test/sdk/batch.anvil.test.ts needs anvil (Foundry) + out/ from forge build;
-      # AGENTAUDIT_SKIP_ANVIL is deliberately unset so the integration test runs.
+      # Strict typecheck incl. structural compatibility with MnemoPay's OnChainAnchorSink
+      - name: typecheck packages/mnemopay-anchor
+        run: npx tsc -p packages/mnemopay-anchor/tsconfig.json --noEmit
+
+      # test/sdk/*.anvil.test.ts and packages/*/test/*.anvil.test.ts need anvil
+      # (Foundry) + out/ from forge build; AGENTAUDIT_SKIP_ANVIL is deliberately
+      # unset so the integration tests run.
       - name: jest
         run: npx jest

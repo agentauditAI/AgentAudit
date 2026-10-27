@@ -7,6 +7,7 @@ const config: Config = {
     "**/test/api/**/*.test.ts",
     "**/test/sdk/**/*.test.ts",
     "**/test/plugin/**/*.test.js",
+    "**/packages/*/test/**/*.test.ts",
   ],
   moduleFileExtensions: ["ts", "js"],
   // plugin-elizaos depends on the published @agentauditai/sdk; in-repo tests run
