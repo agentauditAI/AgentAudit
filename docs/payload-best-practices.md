@@ -53,7 +53,7 @@ await sdk.logAction({
 ```
 What goes on-chain: `sha256:3a7bd3e2b6...` — meaningless to competitors.
 What stays off-chain: Full trade data in your private database.
-How to prove compliance: Show regulator the original data → compute hash → matches on-chain record → log is authentic and tamper-proof.
+How to prove compliance: Show regulator the original data → compute hash → matches on-chain record → log is authentic and tamper-evident (anchored on-chain, any change is detectable).
 ---
 How compliance verification works
 ```
@@ -71,7 +71,7 @@ EU AI Act articles satisfied
 Article	Requirement	How hashed logging satisfies it
 Art. 13	Transparency	Log proves action occurred at exact timestamp
 Art. 14	Human oversight	Authorized agent ID and caller recorded
-Art. 15	Accuracy	Immutable record, cannot be modified post-fact
+Art. 15	Accuracy	Tamper-evident record — anchored on-chain, any change is detectable
 Art. 17	Record-keeping	On-chain hash + off-chain data = full audit trail
 ---
 Quick reference — recommended actionType values
