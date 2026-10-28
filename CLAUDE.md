@@ -46,6 +46,7 @@ sdk/src/anthropic.ts ← AuditedAnthropic wrapper
 sdk/src/langchain.ts ← AgentAuditCallbackHandler + withAudit()
 plugin-elizaos/      ← ElizaOS plugin (do not modify — separately versioned)
 packages/mnemopay-anchor/ ← @agentauditai/mnemopay-anchor: MnemoPay OnChainAnchorSink on AuditVault v2 commitBatch (test/vendor/ = vendored MnemoPay, Apache-2.0, do not edit)
+tools/verify/        ← agentaudit-verify CLI: standalone Evidence Schema v1 bundle verifier (ethers only; no imports from sdk/ or packages/)
 fixtures/            ← shared cross-project fixtures (versioned dirs, never edit an existing version)
 test/plugin/         ← Jest tests for the ElizaOS plugin (CommonJS .js)
 scripts/             ← Hardhat deployment scripts

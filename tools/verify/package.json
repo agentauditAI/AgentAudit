@@ -1,0 +1,19 @@
+{
+  "name": "@agentauditai/verify",
+  "version": "0.1.0",
+  "description": "Standalone verifier for AgentAudit Evidence Schema v1 bundles anchored on AuditVault v2.",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "agentaudit-verify": "dist/cli.js"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "ethers": "^6.16.0"
+  },
+  "engines": { "node": ">=18" }
+}

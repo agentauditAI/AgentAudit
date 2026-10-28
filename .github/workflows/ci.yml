@@ -44,8 +44,14 @@ jobs:
       - name: typecheck packages/mnemopay-anchor
         run: npx tsc -p packages/mnemopay-anchor/tsconfig.json --noEmit
 
-      # test/sdk/*.anvil.test.ts and packages/*/test/*.anvil.test.ts need anvil
-      # (Foundry) + out/ from forge build; AGENTAUDIT_SKIP_ANVIL is deliberately
-      # unset so the integration tests run.
+      - name: typecheck + build tools/verify
+        run: |
+          npx tsc -p tools/verify/tsconfig.json --noEmit
+          npx tsc -p tools/verify/tsconfig.build.json
+
+      # test/sdk/*.anvil.test.ts, packages/*/test/*.anvil.test.ts and
+      # tools/*/test/*.anvil.test.ts need anvil (Foundry) + out/ from forge
+      # build; AGENTAUDIT_SKIP_ANVIL is deliberately unset so the integration
+      # tests run.
       - name: jest
         run: npx jest
