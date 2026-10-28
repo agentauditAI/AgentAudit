@@ -3,7 +3,34 @@
 > On-chain EU AI Act compliance infrastructure for autonomous AI agents —
 > the audit, registration, and incident-reporting layer for ERC-8004.
 
+AgentAudit supports Art. 12 (record-keeping) and Art. 19 (log retention) evidence:
+agents log automatically, and a Merkle root of each batch is anchored on-chain so
+anyone can later check that the logs were not changed after anchoring. The
+on-chain anchor is a verification aid, not something the Act itself requires.
+
+## Verify it yourself
+
+The first AuditVault v2 batch on Base mainnet:
+[`0xf5e494b9…dc14ba`](https://basescan.org/tx/0xf5e494b922794a1a718024220c79ad8742eb248d15c5c219bb1fceea43dc14ba).
+Its evidence bundle is [`docs/demo/first-anchor-bundle.json`](docs/demo/first-anchor-bundle.json).
+Re-check it with the standalone verifier ([`tools/verify/`](tools/verify/README.md),
+depends only on `ethers`):
+
+```bash
+npm install
+npx tsc -p tools/verify/tsconfig.build.json
+node tools/verify/dist/cli.js docs/demo/first-anchor-bundle.json --rpc https://mainnet.base.org
+# … RESULT  PASS  14/14 checks passed
+```
+
+The verifier recomputes every `action_ref` and the Merkle root from the bundle,
+then checks the `LogBatchCommitted` event and `verifyLog` for each entry on-chain.
+
 ## Deployed Networks
+
+**Batch logging (AuditVault v2 `commitBatch`) is live on Base mainnet only.**
+Incident reporting (IncidentRegistry v2, Art. 73) is live on 5 mainnets: Base,
+Arbitrum One, Optimism, Polygon and Mantle.
 
 ### Production (Mainnet)
 
@@ -18,6 +45,11 @@
 Only the Base and Robinhood Testnet contracts are AuditVault v2 (`contracts/v2/AuditVault.sol`) and
 support SDK batch anchoring. The Arbitrum/Optimism/Polygon contract shares some v2 read functions but has
 no `commitBatch(address,bytes32,string,uint256,uint8)`; see `sdk/README.md` → Supported Networks.
+
+| Network | IncidentRegistry v2 (Art. 73) |
+|---|---|
+| Base, Arbitrum One, Polygon, Mantle | `0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F` |
+| Optimism | `0x976b03a2417cf7926813605F427ED499fdF61e10` |
 
 ### Testnet
 
