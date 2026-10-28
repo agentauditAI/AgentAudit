@@ -113,13 +113,13 @@ const server = new McpServer(
 
 server.tool(
   "audit_action",
-  "Log an AI agent action to the AgentAuditBatch contract. Broadcasts to all 5 networks when network is omitted.",
+  "Log an AI agent action to the AgentAuditBatch contract. When network is omitted, sends to every network with an AUDIT_BATCH_<NETWORK> address set (only mantle has a default); others are skipped.",
   {
     agent_id:    z.number().int().positive().describe("On-chain agent ID (uint256)"),
     action_type: z.string().min(1).describe("Action type label, e.g. LLM_DECISION"),
     payload:     z.string().min(1).describe("Raw payload — will be keccak256-hashed before logging"),
     network:     z.enum(["mantle", "base", "arbitrum", "optimism", "polygon"]).optional()
-                  .describe("Target network. Omit to broadcast to all 5 networks."),
+                  .describe("Target network. Omit to send to every network with an AUDIT_BATCH_<NETWORK> address set."),
   },
   async ({ agent_id, action_type, payload, network }) => {
     const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payload));

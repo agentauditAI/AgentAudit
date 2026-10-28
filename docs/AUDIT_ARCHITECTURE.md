@@ -42,7 +42,7 @@ AgentAudit provides immutable, on-chain audit logging for AI agents. Every actio
 
 ## Design Principles
 
-- **Immutability** — logs cannot be modified after submission
+- **Tamper-evident** — log hashes are anchored on-chain, so any change is detectable
 - **Transparency** — all logs publicly queryable
 - **Gas efficiency** — batch operations minimize transaction costs
 - **Modularity** — plugins for major agent frameworks (ElizaOS first)
