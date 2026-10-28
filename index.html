@@ -106,13 +106,14 @@
       font-family: var(--mono); font-size: 0.78rem; text-align: left;
       position: relative; overflow: hidden;
     }
-    .log-stream::before { content: 'LIVE AUDIT LOG'; position: absolute; top: 1rem; right: 1rem; font-size: 0.65rem; color: var(--green); letter-spacing: 0.1em; }
+    .log-stream::before { content: 'EXAMPLE LOG · DEMO DATA'; position: absolute; top: 1rem; right: 1rem; font-size: 0.65rem; color: var(--text-dim); letter-spacing: 0.1em; }
     .log-line { display: flex; gap: 1rem; padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); opacity: 0; animation: fadeIn 0.4s forwards; }
     .log-line:last-child { border-bottom: none; }
     @keyframes fadeIn { to { opacity: 1; } }
     .log-time { color: var(--text-dim); min-width: 85px; }
     .log-action { color: var(--green); min-width: 200px; }
     .log-hash { color: var(--amber); }
+    .log-proof { margin-top: 0.75rem; font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); }
 
     /* ── Networks strip ── */
     .networks-strip {
@@ -299,6 +300,7 @@
         <span class="log-hash">0xc7d9...881f</span>
       </div>
     </div>
+    <p class="log-proof">Real anchor on Base: <a href="https://basescan.org/tx/0xf5e494b922794a1a718024220c79ad8742eb248d15c5c219bb1fceea43dc14ba" target="_blank">0xf5e4...14ba ↗</a></p>
   </div>
 
   <!-- NETWORKS STRIP -->
