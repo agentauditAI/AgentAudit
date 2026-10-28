@@ -45,6 +45,8 @@ sdk/src/openai.ts    ← AuditedOpenAI wrapper
 sdk/src/anthropic.ts ← AuditedAnthropic wrapper
 sdk/src/langchain.ts ← AgentAuditCallbackHandler + withAudit()
 plugin-elizaos/      ← ElizaOS plugin (do not modify — separately versioned)
+packages/mnemopay-anchor/ ← @agentauditai/mnemopay-anchor: MnemoPay OnChainAnchorSink on AuditVault v2 commitBatch (test/vendor/ = vendored MnemoPay, Apache-2.0, do not edit)
+fixtures/            ← shared cross-project fixtures (versioned dirs, never edit an existing version)
 test/plugin/         ← Jest tests for the ElizaOS plugin (CommonJS .js)
 scripts/             ← Hardhat deployment scripts
 docs/                ← Architecture, compliance, threat-model docs

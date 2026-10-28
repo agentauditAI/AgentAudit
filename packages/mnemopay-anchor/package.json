@@ -1,0 +1,23 @@
+{
+  "name": "@agentauditai/mnemopay-anchor",
+  "version": "0.1.0",
+  "description": "OnChainAnchorSink for @mnemopay/sdk AuditChain bundles, backed by AgentAudit AuditVault v2 commitBatch.",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "ethers": "^6.16.0"
+  },
+  "peerDependencies": {
+    "@mnemopay/sdk": ">=1.14.3"
+  },
+  "peerDependenciesMeta": {
+    "@mnemopay/sdk": { "optional": true }
+  },
+  "engines": { "node": ">=18" }
+}
