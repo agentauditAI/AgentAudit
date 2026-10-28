@@ -189,7 +189,6 @@
     .wave1-perks { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.5rem; }
     .wave1-perk { font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim); display: flex; align-items: center; gap: 0.4rem; }
     .wave1-perk::before { content: '✓'; color: var(--green); font-weight: 700; }
-    .deadline-counter { font-family: var(--mono); font-size: 0.75rem; color: var(--amber); margin-top: 1.5rem; }
     .spots-left { font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); margin-top: 0.5rem; letter-spacing: 0.05em; }
 
     /* ── Code block ── */
@@ -564,26 +563,26 @@
   <!-- WAVE 1 CTA -->
   <div class="wave1-section" id="wave1">
     <div class="wave1-inner">
-      <div class="wave1-badge">⚡ Wave 1 Founding Members — 5 Spots Globally</div>
-      <h2 class="wave1-title">$25K value.<br /><span>$0 cost.</span></h2>
+      <div class="wave1-badge">⚡ Design Partner Pilots — Open Now</div>
+      <h2 class="wave1-title">Free pilot.<br /><span>Verifiable evidence.</span></h2>
       <p class="wave1-sub">
-        Get full AgentAudit AI infrastructure — logging on Base, incidents on 5 networks, all contracts,
-        SDK + MCP server — completely free as a Founding Member pilot.
-        Aug 2 deadline is not a suggestion.
+        A free pilot for teams running AI agents in production: batch logging
+        on Base, incident reporting on 5 networks, the TypeScript SDK, and a standalone
+        verifier your auditors can run themselves. Annex III obligations apply from
+        2 Dec 2027, and conformity work takes quarters, so the time to start is now.
       </p>
       <div class="wave1-perks">
         <div class="wave1-perk">Evidence for EU AI Act Art. 12 &amp; 19 logging</div>
         <div class="wave1-perk">Live on Base mainnet</div>
         <div class="wave1-perk">Dedicated onboarding</div>
-        <div class="wave1-perk">Case study featured</div>
+        <div class="wave1-perk">Shape the roadmap</div>
         <div class="wave1-perk">No lock-in</div>
       </div>
       <div class="cta-group" style="justify-content:center">
         <a href="mailto:hello@getagentaudit.xyz?subject=Wave 1 Founding Member" class="btn-primary">Apply for Free Pilot</a>
         <a href="https://getagentaudit.xyz/dashboard.html" class="btn-ghost">See Dashboard</a>
       </div>
-      <div class="deadline-counter" id="wave1Deadline"></div>
-      <div class="spots-left">5 spots · 0 cost · May 31, 2026 deadline</div>
+      <div class="spots-left">Open now · limited spots · no cost</div>
     </div>
   </div>
 
@@ -644,15 +643,6 @@
       document.getElementById('days50').textContent = d50 > 0 ? d50 : 'LIVE';
       document.getElementById('daysMiCA').textContent = dMiCA > 0 ? dMiCA : 'LIVE';
       document.getElementById('daysAnnex').textContent = dAnnex > 0 ? dAnnex : 'LIVE';
-
-      // Wave 1 deadline
-      const dWave1 = daysUntil('2026-05-31');
-      const el = document.getElementById('wave1Deadline');
-      if (el) {
-        el.textContent = dWave1 > 0
-          ? `⏱ ${dWave1} days until Wave 1 closes`
-          : 'Wave 1 closed';
-      }
     }
 
     updateCountdowns();
