@@ -1,0 +1,53 @@
+{
+  "schema": "agentaudit-evidence-v1",
+  "built_at": "2026-10-28T12:00:00.000Z",
+  "meta": {
+    "producer": "agentaudit-demo",
+    "purpose": "AgentAudit public demo bundle — synthetic actions, no personal data",
+    "event_count": 3,
+    "anchor": {
+      "chain": "base",
+      "txHash": "0xf5e494b922794a1a718024220c79ad8742eb248d15c5c219bb1fceea43dc14ba",
+      "rootCommitment": "0b35ff37cec485268e123528229fd16a2e826d39ca8c878adf87a758a72014f7"
+    }
+  },
+  "leaf_hash": "sha256(jcs(preimage))",
+  "node_hash": "keccak256(sorted_pair)",
+  "odd_node": "promote",
+  "merkle_root": "0x0b35ff37cec485268e123528229fd16a2e826d39ca8c878adf87a758a72014f7",
+  "entries": [
+    {
+      "action_ref": "0xee5c58b93325ee6af2620d09d2db1097566481dbe016abf1329be68a94178570",
+      "preimage": {
+        "action_type": "tool_call",
+        "agent_id": "agentaudit-demo-agent",
+        "scope": "tool_call:weather_lookup:result_hash:0e4f069a9261bec2b8258c32866ea378d6474f6d55a71581c3b8d87a34fe22ff",
+        "timestamp_ms": 1793188680000
+      }
+    },
+    {
+      "action_ref": "0x659d7959538307aec211f11ebccf3cc8f692981ed456aababf409192f3cf9948",
+      "preimage": {
+        "action_type": "data_read",
+        "agent_id": "agentaudit-demo-agent",
+        "scope": "data_read:/v1/fx-rates:2026-10-28:91ee1e812219d7d079940c2a6f21b2c1ffb40d4c414aac9200f6c0f7b941809e",
+        "timestamp_ms": 1793188710000
+      }
+    },
+    {
+      "action_ref": "0xd65147468bed867339c54967bc5028639a8c7124c8b706b25a6ae758d61aedb5",
+      "preimage": {
+        "action_type": "LLM_DECISION",
+        "agent_id": "agentaudit-demo-agent",
+        "scope": "llm_call:demo-model:record_hash:7d375a3f6f2933170e3492c4d57a2306d99565d1102c8f6eaf7737edd5cedf26",
+        "timestamp_ms": 1793188740000
+      },
+      "record": {
+        "model": "demo-model",
+        "prompt_hash": "sha256:80c21c9003b509da684bae1d9a17d27323a282bfb066bcd98b348a019fe258c0",
+        "response_hash": "sha256:f29517d5e77e5ddc42c54cc20c9842263b5f9d1d49452494c20187da5db85738",
+        "risk_level": "LOW"
+      }
+    }
+  ]
+}
