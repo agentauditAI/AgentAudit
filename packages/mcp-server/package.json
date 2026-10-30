@@ -1,0 +1,37 @@
+{
+  "name": "@agentauditai/mcp-server",
+  "version": "2.0.0",
+  "description": "MCP server for AgentAudit: EU AI Act audit logging on AuditVault v2 (Base), incident reporting (Art. 73) and compliance reads.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentauditAI/AgentAudit.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/agentauditAI/AgentAudit/tree/main/packages/mcp-server#readme",
+  "keywords": ["mcp", "model-context-protocol", "eu-ai-act", "audit", "agentaudit", "base"],
+  "main": "dist/src/mcp-server.js",
+  "types": "dist/src/mcp-server.d.ts",
+  "bin": {
+    "agentaudit-mcp": "dist/src/mcp-server.js"
+  },
+  "files": [
+    "dist/src",
+    "dist/sdk/src",
+    "dist/tools/verify/src",
+    "dist/deployments",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node scripts/clean.js && tsc -p tsconfig.build.json && node scripts/copy-deployments.js",
+    "prepack": "npm run build",
+    "smoke": "node scripts/smoke.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^16.0.0",
+    "ethers": "^6.16.0",
+    "zod": "^4.4.3"
+  },
+  "engines": { "node": ">=18" }
+}
