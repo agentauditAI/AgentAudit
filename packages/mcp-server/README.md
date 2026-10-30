@@ -14,8 +14,6 @@ MCP (Model Context Protocol) server for [AgentAudit](https://github.com/agentaud
 npx -y @agentauditai/mcp-server        # starts the stdio server (bin: agentaudit-mcp)
 ```
 
-Until the package is on npm, run it from the repo: `git clone https://github.com/agentauditAI/AgentAudit && cd AgentAudit && npm install && npm run mcp`.
-
 The package is compiled JavaScript and needs Node.js 18 or newer; it does not use ts-node at runtime.
 
 Example MCP client config:
