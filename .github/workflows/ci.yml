@@ -49,8 +49,11 @@ jobs:
           npx tsc -p tools/verify/tsconfig.json --noEmit
           npx tsc -p tools/verify/tsconfig.build.json
 
-      # test/sdk/*.anvil.test.ts, packages/*/test/*.anvil.test.ts and
-      # tools/*/test/*.anvil.test.ts need anvil (Foundry) + out/ from forge
+      - name: typecheck src/mcp-server.ts
+        run: npx tsc --noEmit --esModuleInterop --skipLibCheck --module commonjs --target es2020 --moduleResolution node src/mcp-server.ts
+
+      # test/sdk/*.anvil.test.ts, test/mcp/*.anvil.test.ts, packages/*/test/*.anvil.test.ts
+      # and tools/*/test/*.anvil.test.ts need anvil (Foundry) + out/ from forge
       # build; AGENTAUDIT_SKIP_ANVIL is deliberately unset so the integration
       # tests run.
       - name: jest
