@@ -1,0 +1,49 @@
+{
+  "schema": "agentaudit-evidence-v1",
+  "batch_id": "0x7983db48b7d2b4860f7514b598f6a087a4bb2c6de00866579db71bdf0960a882",
+  "agent_address": "0x3A867BF9651370861CC77D627167329C6cef29E2",
+  "merkle_root": "0x7983db48b7d2b4860f7514b598f6a087a4bb2c6de00866579db71bdf0960a882",
+  "leaf_hash": "sha256(jcs(preimage))",
+  "node_hash": "keccak256(sorted_pair)",
+  "odd_node": "promote",
+  "created_at_ms": 1793381479853,
+  "entries": [
+    {
+      "action_ref": "0xab2f83cd458e658bfd18848ee911d41d6d11f077de09d1f2f6952763baa116e1",
+      "preimage": {
+        "action_type": "DEMO_ACTION",
+        "agent_id": "agentaudit-demo",
+        "scope": "agent_action:mcp:record_hash:c03f1cbf0319fefcc175cc948cb5a708eba5dadf6bcea9b3ef916cd362df6229",
+        "timestamp_ms": 1793381348096
+      },
+      "record": {
+        "plugin": "agentaudit-mcp/2.0",
+        "action_type": "DEMO_ACTION",
+        "risk_level": "LOW",
+        "payload_hash": "sha256:50a3643ed48a059c44ab202cfc983b3ee6c27b66e6cbea9ff4dd2a4140bfd21c"
+      }
+    },
+    {
+      "action_ref": "0xaf190c1d008145a4758edfece83c7655a2ee04fd95c054b53950c386b7d72584",
+      "preimage": {
+        "action_type": "DEMO_ACTION",
+        "agent_id": "agentaudit-demo",
+        "scope": "agent_action:mcp:record_hash:c4a7456a4f9ee02b3b118597507e2675806497de55599a168dfbcee8d5afa080",
+        "timestamp_ms": 1793381348097
+      },
+      "record": {
+        "plugin": "agentaudit-mcp/2.0",
+        "action_type": "DEMO_ACTION",
+        "risk_level": "LOW",
+        "payload_hash": "sha256:d3f6ef06b71db0c9429d284801a31938d26023301ad18be378f08c24e5fbdcdb"
+      }
+    }
+  ],
+  "meta": {
+    "anchor": {
+      "chain": "base",
+      "txHash": "0xa0650bd199fd49b4273247ea1e8bf82e956129bb554e16337e1b327716811f9e",
+      "rootCommitment": "0x7983db48b7d2b4860f7514b598f6a087a4bb2c6de00866579db71bdf0960a882"
+    }
+  }
+}
