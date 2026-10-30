@@ -376,7 +376,7 @@
       <div class="feature">
         <div class="feature-icon">⚡</div>
         <h3>MCP Server + SDK</h3>
-        <p>4 on-chain tools via MCP protocol. TypeScript SDK with ElizaOS + LangChain integrations.</p>
+        <p>7 on-chain tools via MCP protocol: audit logging live on Base, incident reporting on 5 networks. TypeScript SDK with ElizaOS + LangChain integrations.</p>
       </div>
     </div>
   </section>
@@ -492,11 +492,14 @@
           <div class="plugin-name">MCP Server</div>
           <div class="plugin-status live">Live</div>
         </div>
-        <p class="plugin-desc">4 on-chain tools via Model Context Protocol. Works with Claude, Cursor, and any MCP-compatible runtime.</p>
+        <p class="plugin-desc">7 on-chain tools via Model Context Protocol. Audit logging (Merkle batches on AuditVault v2) is live on Base; incident reporting on 5 networks. Works with Claude, Cursor, and any MCP-compatible runtime.</p>
         <div class="plugin-code">
           npx @agentauditai/mcp-server<br />
-          <span class="str"># tools: logAction, getAuditLog,</span><br />
-          <span class="str"># verifyProof, getReport</span>
+          <span class="str"># logging (Base): audit_action,</span><br />
+          <span class="str"># get_audit_log, verify_proof</span><br />
+          <span class="str"># incidents (5 networks): report_incident</span><br />
+          <span class="str"># reports: get_compliance_report,</span><br />
+          <span class="str"># get_risk_score, check_conformity</span>
         </div>
       </div>
       <div class="plugin-card">

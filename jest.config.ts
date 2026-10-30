@@ -6,6 +6,7 @@ const config: Config = {
   testMatch: [
     "**/test/api/**/*.test.ts",
     "**/test/sdk/**/*.test.ts",
+    "**/test/mcp/**/*.test.ts",
     "**/test/plugin/**/*.test.js",
     "**/packages/*/test/**/*.test.ts",
     "**/tools/*/test/**/*.test.ts",

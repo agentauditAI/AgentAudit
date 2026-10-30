@@ -40,6 +40,8 @@ test/                ← Foundry test files (*.t.sol)
 test/api/            ← Jest + supertest API tests
 test/sdk/            ← Jest SDK wrapper tests
 src/api/             ← REST API gateway (Express + TypeScript)
+src/mcp-server.ts    ← MCP server (`npm run mcp`); `createServer(options)` + stdio entry. audit_action / get_audit_log / verify_proof use AuditVault v2 (Base; `AUDIT_VAULT_<NETWORK>` overrides), Phase 7 tools use deployments/phase7-*.json
+test/mcp/            ← anvil tests for every MCP tool (same AGENTAUDIT_SKIP_ANVIL rule as the SDK anvil tests)
 sdk/src/index.ts     ← core AgentAudit SDK (ethers v6, on-chain logging)
 sdk/src/openai.ts    ← AuditedOpenAI wrapper
 sdk/src/anthropic.ts ← AuditedAnthropic wrapper
