@@ -1,0 +1,18 @@
+{
+  // Compiles the repo's src/mcp-server.ts (the single source of truth) plus the
+  // SDK and tools/verify modules it imports. rootDir is the repo root so the
+  // relative imports keep working: dist/src, dist/sdk/src, dist/tools/verify/src.
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": false,
+    "declaration": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "rootDir": "../..",
+    "outDir": "dist"
+  },
+  "files": ["../../src/mcp-server.ts"]
+}

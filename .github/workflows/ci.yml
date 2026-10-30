@@ -52,6 +52,21 @@ jobs:
       - name: typecheck src/mcp-server.ts
         run: npx tsc --noEmit --esModuleInterop --skipLibCheck --module commonjs --target es2020 --moduleResolution node src/mcp-server.ts
 
+      # Compiled @agentauditai/mcp-server (plain node, no ts-node): build, start
+      # the bin over stdio, and check the tarball contents. Never publishes.
+      - name: build + smoke + pack check packages/mcp-server
+        working-directory: packages/mcp-server
+        run: |
+          npm run build
+          npm run smoke
+          npm pack --dry-run --json --ignore-scripts > "$RUNNER_TEMP/pack.json"
+          node -e '
+            const files = require(process.env.RUNNER_TEMP + "/pack.json")[0].files.map((f) => f.path);
+            const bad = files.filter((f) => /(^|\/)\.env|\.test\.|(^|\/)test\/|\.ts$/.test(f) && !f.endsWith(".d.ts"));
+            console.log(files.join("\n"));
+            if (bad.length) { console.error("unexpected files in tarball:", bad); process.exit(1); }
+          '
+
       # test/sdk/*.anvil.test.ts, test/mcp/*.anvil.test.ts, packages/*/test/*.anvil.test.ts
       # and tools/*/test/*.anvil.test.ts need anvil (Foundry) + out/ from forge
       # build; AGENTAUDIT_SKIP_ANVIL is deliberately unset so the integration
