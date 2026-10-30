@@ -489,9 +489,8 @@
         </div>
         <p class="plugin-desc">7 on-chain tools via Model Context Protocol. Audit logging (Merkle batches on AuditVault v2) is live on Base; incident reporting on 5 networks. Works with Claude, Cursor, and any MCP-compatible runtime.</p>
         <div class="plugin-code">
-          <span class="cmt"># run from the repo (npm package coming soon)</span><br />
-          git clone https://github.com/agentauditAI/AgentAudit &amp;&amp; <span class="kw">cd</span> AgentAudit<br />
-          npm install &amp;&amp; npm run mcp<br />
+          npx -y @agentauditai/mcp-server<br />
+          <span class="cmt"># or from the repo: git clone https://github.com/agentauditAI/AgentAudit, then npm install &amp;&amp; npm run mcp</span><br />
           <span class="str"># logging (Base): audit_action,</span><br />
           <span class="str"># get_audit_log, verify_proof</span><br />
           <span class="str"># incidents (5 networks): report_incident</span><br />
