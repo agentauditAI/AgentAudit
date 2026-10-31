@@ -18,7 +18,7 @@ describe("fixtures are byte-identical", () => {
     [DEMO, "70eeb85a67867bb79093a68454bcf0ded03fea5b5d308756620c2b18642cfc00"],
     [path.join(MNEMOPAY, "bundle.json"), "6d049e5199f6792156df27b8e9dd0a2626aa5b77927480a1efa13353bbdb280a"],
     [path.join(MNEMOPAY, "expected.json"), "17ab666813b9c05280bf594bd101e5160887815bdfa83725ff9f5bdb321330d3"],
-    [path.join(MNEMOPAY, "README.md"), "6902d4af5f41bba6bb3a66b05e552f2f7ff4e01f901225b1c26241ca48a76df3"],
+    [path.join(MNEMOPAY, "README.md"), "e6215201427075e88edbf08a59badfb20a47d70a9f4e6ae44299d06ec78431cf"],
   ])("%s", (file, digest) => {
     expect(sha256File(file)).toBe(digest);
   });
