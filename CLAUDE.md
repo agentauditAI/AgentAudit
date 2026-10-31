@@ -11,7 +11,7 @@ AgentAudit is an on-chain compliance infrastructure for AI agents under the EU A
 
 | Layer | Tool |
 |---|---|
-| Smart contracts | Solidity 0.8.20 |
+| Smart contracts | Solidity 0.8.20 (Hardhat, v1/v2); forge pinned to 0.8.35 (`compilation_restrictions`, v2/src/script); `contracts/v3/` exactly 0.8.38, evm `prague` |
 | Testing | Foundry (`forge test`) |
 | Deployment | Hardhat (`npm run deploy:<network>`) |
 | Networks | Mantle Mainnet, Arbitrum One (+ testnets) |
@@ -55,12 +55,18 @@ test/plugin/         ← Jest tests for the ElizaOS plugin (CommonJS .js)
 scripts/             ← Hardhat deployment scripts
 docs/                ← Architecture, compliance, threat-model docs
 lib/forge-std/       ← Foundry standard library (do not edit)
+lib/openzeppelin-contracts/ ← OpenZeppelin v5.7.0, tag commit cab19933c33c2ad1d4c7a84864a3601dddfd16f3, `contracts/` + LICENSE only (vendored, do not edit); used only by contracts/v3/
+contracts/v3/        ← AuditVault v3 (docs/design/AUDITVAULT_V3.md); toolchain skeleton only so far
 out/                 ← Foundry build artifacts (do not edit or commit)
 ```
 
 ## Solidity Conventions
 
-- `pragma solidity ^0.8.20;` on every file
+- `pragma solidity ^0.8.20;` on every file — **except `contracts/v3/`**, which uses the exact `pragma solidity 0.8.38;` (design doc §9, §13.2 follow-up 3). Re-check solc `bugs.json` / `bugs_by_version.json` for 0.8.38 before any v3 deploy
+- **v3 toolchain is scoped** so existing bytecode never changes:
+  - `foundry.toml` `compilation_restrictions` pin `contracts/v3/**` to 0.8.38 / `prague` (profile `v3`) and `contracts/v2/**`, `src/**`, `script/**` to 0.8.35 (what auto-detect produced); `hardhat.config.js` overrides only `contracts/v3/**` and `lib/openzeppelin-contracts/**` to 0.8.38 / `prague`
+  - `auto_detect_remappings = false` with only `forge-std/` remapped: any remapping (even a `contracts/v3/:` context one) is recorded in every contract's metadata and changes its bytecode. v3 imports OpenZeppelin by **relative path** (`../../lib/openzeppelin-contracts/contracts/...`), which Hardhat also resolves
+  - forge v1.7.1 cannot auto-install 0.8.38: run `./scripts/install-solc.sh` once (checksum-verified official binary into the svm dir); CI does the same
 - `// SPDX-License-Identifier: MIT` header
 - NatSpec on contracts: `@title`, `@notice`, `@dev`, `@custom:article`
 - Section separators use the `// ─── Section Name ───` style (box-drawing dashes)

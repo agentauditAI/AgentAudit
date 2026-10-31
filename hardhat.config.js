@@ -1,15 +1,49 @@
 require("dotenv").config();
 require("@nomicfoundation/hardhat-toolbox");
 
+const fs = require("fs");
+const path = require("path");
+
 const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [];
+
+// contracts/v3/** is pinned to solc 0.8.38 / evm prague (docs/design/AUDITVAULT_V3.md §9).
+// Per-file overrides, not a second entry in `compilers`: Hardhat picks the newest
+// matching compiler per file, which would move every ^0.8.20 contract to 0.8.38.
+// Hardhat checks every file in the import graph, so the OpenZeppelin files v3
+// imports (lib/openzeppelin-contracts, only used by v3) get the same override.
+const V3_COMPILER = {
+  version: "0.8.38",
+  settings: {
+    viaIR: true,
+    optimizer: { enabled: true, runs: 200 },
+    evmVersion: "prague",
+  },
+};
+function solFiles(relDir) {
+  const dir = path.join(__dirname, relDir);
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { recursive: true })
+    .filter((f) => f.endsWith(".sol"))
+    .map((f) => `${relDir}/${f.split(path.sep).join("/")}`);
+}
+const v3Overrides = Object.fromEntries(
+  [...solFiles("contracts/v3"), ...solFiles("lib/openzeppelin-contracts/contracts")].map((f) => [f, V3_COMPILER]),
+);
 
 module.exports = {
   solidity: {
-    version: "0.8.20",
-    settings: {
-      viaIR: true,
-      optimizer: { enabled: true, runs: 200 },
-    },
+    // `compilers` form: the `version` shorthand drops `overrides`
+    compilers: [
+      {
+        version: "0.8.20",
+        settings: {
+          viaIR: true,
+          optimizer: { enabled: true, runs: 200 },
+        },
+      },
+    ],
+    overrides: v3Overrides,
   },
   networks: {
     // ── Testnets ──────────────────────────────────────────────────────────
