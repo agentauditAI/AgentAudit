@@ -26,8 +26,19 @@ jobs:
         with:
           version: v1.7.1
 
+      # contracts/v3/ is pinned to solc 0.8.38 (foundry.toml compilation_restrictions),
+      # which forge v1.7.1 cannot auto-install; checksum-verified official binary.
+      - name: install solc 0.8.38 (v3 profile)
+        run: ./scripts/install-solc.sh
+
+      # Builds both profiles: default (0.8.35, existing contracts) and v3 (0.8.38, prague)
       - name: forge build
         run: forge build
+
+      - name: check v3 profile artifact
+        run: |
+          jq -e '.metadata.compiler.version == "0.8.38+commit.1835d247" and .metadata.settings.evmVersion == "prague"' out/AuditVaultV3.sol/AuditVaultV3.json
+          jq -e '.metadata.compiler.version == "0.8.35+commit.47b9dedd"' out/AuditVault.sol/AuditVault.json
 
       - name: forge test
         run: forge test
@@ -39,6 +50,11 @@ jobs:
 
       - name: npm ci
         run: npm ci
+
+      # Deploy scripts compile with Hardhat: 0.8.20 for v1/v2, per-file
+      # overrides to 0.8.38/prague for contracts/v3/ (hardhat.config.js)
+      - name: hardhat compile
+        run: npx hardhat compile
 
       # Strict typecheck incl. structural compatibility with MnemoPay's OnChainAnchorSink
       - name: typecheck packages/mnemopay-anchor
