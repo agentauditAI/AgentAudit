@@ -14,7 +14,7 @@
     "ethers": "^6.16.0"
   },
   "peerDependencies": {
-    "@mnemopay/sdk": ">=1.14.3"
+    "@mnemopay/sdk": "^1.15.1"
   },
   "peerDependenciesMeta": {
     "@mnemopay/sdk": { "optional": true }
