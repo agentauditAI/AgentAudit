@@ -30,9 +30,9 @@ and depends on MnemoPay only for the shape of its interface types.
 
 ## Install
 
-Not published yet. The package declares `@mnemopay/sdk >=1.14.3` as an optional
-peer dependency: the anchor seam (`governance/anchor-sink`) exists only on the
-unmerged MnemoPay branch `feat/onchain-anchor-sink`, and npm `latest` is 1.14.2.
+Not published yet. Requires `@mnemopay/sdk ^1.15.1` (optional peer dependency):
+1.15.0 lacks the `require` export condition, so `require("@mnemopay/sdk/governance")`
+throws `ERR_PACKAGE_PATH_NOT_EXPORTED` in CommonJS.
 
 ## Usage
 
@@ -130,8 +130,10 @@ npx tsc -p packages/mnemopay-anchor/tsconfig.json --noEmit   # incl. type compat
 - `test/contract.anvil.test.ts` ports MnemoPay's `MockAnchorSink` contract tests
   and runs them against this sink on a real AuditVault v2.
 - The anvil suites need Foundry. Set `AGENTAUDIT_SKIP_ANVIL=1` to skip them.
-- MnemoPay sources used by the tests are vendored under `test/vendor/` (Apache-2.0,
-  see `test/vendor/PROVENANCE.md`). The package itself doesn't ship them.
+- MnemoPay sources used by the tests are vendored under `test/vendor/` (Apache-2.0).
+  They compile to the same bytes as `dist/governance/{anchor-sink,audit-chain}` in the
+  published `@mnemopay/sdk` 1.15.0 and 1.15.1; see `test/vendor/PROVENANCE.md`.
+  The package itself doesn't ship them.
 
 Shared fixture: [`fixtures/mnemopay-anchor/v1/`](../../fixtures/mnemopay-anchor/v1/README.md).
 
