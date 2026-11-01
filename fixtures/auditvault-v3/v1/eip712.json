@@ -1,0 +1,43 @@
+{
+  "fixture": "auditvault-v3/v1/eip712",
+  "generator": "gen/gen_eip712.ts (ethers v6 TypedDataEncoder + SigningKey, independent of the Solidity implementation)",
+  "typehashes": {
+    "domain": "0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f",
+    "batch": "0x7af2df7acacc5c264ef34182889651ddef0bcf2c042e0c9e022524e49e37cbdf",
+    "batch_type": "Batch(address identityRegistry,uint256 agentId,uint64 seq,bytes32 prevBatchHash,bytes32 root,uint64 leafCount,uint8 rootFormat,bytes32 metaHash)",
+    "name_hash": "0x63d42055ddacfa97712da5aaf9c6f50377d900c1f922dbf1ebb622c5cc1937d8",
+    "version_hash": "0x2a80e1ef1d7842f27f2e6be0972bb708b9a135c38860dbe73c27c3486c34f4de"
+  },
+  "domain": {
+    "name": "AgentAudit AuditVault",
+    "version": "3",
+    "chainId": 8453,
+    "verifyingContract": "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+  },
+  "batch": {
+    "identityRegistry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+    "agentId": "1",
+    "seq": "0",
+    "prevBatchHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "root": "0xdf896896c799531f1fd1e556cea26a6989ab06853bcbfdd3e4f5097a611f658f",
+    "leafCount": "3",
+    "rootFormat": 0,
+    "metaHash": "0x0a3594e4b6dfb2448b5ac69f66c1b965b501a8c66afbbe68cb5ceed0d3d01eb3",
+    "metaHash_preimage_utf8": "auditvault-v3 fixture v1 batch 0",
+    "root_source": "rfc6962.json trees[n=3].root"
+  },
+  "domainSeparator": "0x3c8639739f9ea2a472cfd2de5094ff12341a7f677c99b8cf528ba1b9f161314e",
+  "structHash": "0xc0b4d1ec900156a42d2a729515d5b236ac2735beaaf0d161fa2d24331c1cf65e",
+  "batchHash": "0x9320552bc94186ad8d7c6d3be2f391dcdddeef7fa349877ce6081e033f3c679b",
+  "signer": {
+    "note": "anvil/hardhat account #0 (public test key)",
+    "privateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+    "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  },
+  "signature": {
+    "serialized": "0x7ce1fed78c9e76a8a88ef4cba8956d5f6db2b2ce79fab6ccdba4f438657a111c48ddc96ddb3afd52734476f8e44cccc2c2c323828dd17d2895169dd54e7a1eda1b",
+    "r": "0x7ce1fed78c9e76a8a88ef4cba8956d5f6db2b2ce79fab6ccdba4f438657a111c",
+    "s": "0x48ddc96ddb3afd52734476f8e44cccc2c2c323828dd17d2895169dd54e7a1eda",
+    "v": 27
+  }
+}

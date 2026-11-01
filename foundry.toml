@@ -25,5 +25,5 @@ compilation_restrictions = [
     { paths = "src/**", version = "=0.8.35" },
     { paths = "script/**", version = "=0.8.35" },
 ]
-fs_permissions = [{ access = "read", path = "./out" }]
+fs_permissions = [{ access = "read", path = "./out" }, { access = "read", path = "./fixtures/auditvault-v3" }]
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
