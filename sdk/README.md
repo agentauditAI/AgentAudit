@@ -264,6 +264,52 @@ Never commit private keys — keep them in a gitignored `.env`.
 
 ---
 
+## Base Builder Code attribution
+
+On **Base mainnet (chain id 8453) and Base Sepolia (84532) only**, the SDK appends a
+[Base Builder Code](https://docs.base.org/base-chain/builder-codes/builder-codes)
+attribution suffix (ERC-8021, schema 0) to the calldata of its own contract calls
+(`commitBatch`, `reportIncident`, `markReportedToAuthority`, `log`, `logBatch`,
+`registerAgent`, `revokeAgent`, `enrollMonitoring`, `recordMetric`, `recordReview`).
+It is **on by default** with AgentAudit's code `bc_pd681w25`, so Base can attribute
+these transactions to AgentAudit.
+
+**What is appended:** 29 bytes after the ABI-encoded call,
+`0x62635f70643638317732350b0080218021802180218021802180218021`:
+
+| Bytes | Hex | Meaning |
+|---|---|---|
+| 11 | `62635f7064363831773235` | the code `bc_pd681w25`, ASCII |
+| 1 | `0b` | code length (11) |
+| 1 | `00` | ERC-8021 schema 0 |
+| 16 | `80218021…8021` | ERC-8021 marker (`0x8021` × 8) |
+
+- The contracts ignore trailing calldata. Events, stored state and return values are the
+  same with or without the suffix.
+- **No audit evidence changes**: `action_ref`, the Merkle root, scopes, payload hashes,
+  `contentURI` and the batch bundle are computed before the call is encoded. Only the
+  transaction hash differs, as it would for any other transaction.
+- The suffix costs 452 gas of calldata (plus its share of Base's L1 data fee). Gas is
+  estimated on the final calldata.
+- The code is **public**: anyone can read it from the transaction.
+- The chain is taken from the RPC (`eth_chainId`), never from the configured network
+  name. Other chains, including a `"base"` config pointed at a local node, get no suffix.
+
+**Turn it off, or use your own code:**
+
+```typescript
+new AgentAudit({ privateKey, network: "base", builderCode: false });        // no suffix
+new AgentAudit({ privateKey, network: "base", builderCode: "bc_yourcode" }); // your code
+```
+
+A custom code must follow ERC-8021: 7-bit ASCII, no comma, at most 255 bytes.
+`audit.getBuilderCode()` returns the code in use (or `null`), and
+`await audit.getAttributionSuffix()` returns the exact bytes appended on the current chain
+(`"0x"` = none). The encoding lives in `sdk/src/attribution.ts`, with no extra runtime
+dependency. It is tested against the ERC-8021 test vector and against `ox/erc8021`.
+
+---
+
 ## Links
 
 - Website: [getagentaudit.xyz](https://getagentaudit.xyz)

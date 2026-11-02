@@ -116,7 +116,8 @@ All three wrappers share the same principles:
 - **Hashed payloads** — `prompt_hash` and `response_hash` are `sha256:` digests; raw content never touches the chain (see `docs/payload-best-practices.md`)
 - **`actionType`** is always `"LLM_DECISION"`
 - **`riskLevel`** defaults to `"HIGH"` if omitted
-- Tests in `test/sdk/*.test.ts` — AgentAudit SDK and LLM clients are fully mocked; no real network or API calls. Exception: `test/sdk/batch.anvil.test.ts` and `test/sdk/incident.anvil.test.ts` spawn a local `anvil` and deploy AuditVault v2 / IncidentRegistry v2 from `out/` (needs Foundry + `forge build`; fails if `anvil` is missing unless `AGENTAUDIT_SKIP_ANVIL=1` is set)
+- **Base Builder Code (ERC-8021)**: every SDK contract call goes through `sendAttributed` (`sdk/src/attribution.ts`). On chain id 8453/84532 (from `eth_chainId`, never the network name) it appends the schema-0 suffix for `bc_pd681w25`. `builderCode: false` (or MCP `AGENTAUDIT_BUILDER_CODE=false|off|0`) disables it; a string is the integrator's own code. Evidence bytes are unaffected. `ox` is a devDependency used only by `test/sdk/attribution.test.ts` (via `test/sdk/helpers/ox-erc8021.mjs`); runtime code must not import it
+- Tests in `test/sdk/*.test.ts` — AgentAudit SDK and LLM clients are fully mocked; no real network or API calls. Exception: `test/sdk/batch.anvil.test.ts`, `test/sdk/incident.anvil.test.ts` and `test/sdk/attribution.anvil.test.ts` (anvil `--chain-id 8453`) spawn a local `anvil` and deploy AuditVault v2 / IncidentRegistry v2 from `out/` (needs Foundry + `forge build`; fails if `anvil` is missing unless `AGENTAUDIT_SKIP_ANVIL=1` is set)
 - **ts-jest `diagnostics: false`** is set in `jest.config.ts` because ethers v6 uses `#privateField` syntax in `.d.ts` files that trips ts-jest type-checking; root `tsconfig.json` still enforces types at build time
 
 ### `sdk/src/openai.ts` — `AuditedOpenAI`

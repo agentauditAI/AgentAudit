@@ -5,8 +5,10 @@
 
 import { ethers } from "ethers";
 import type { BatchCommitter, CommitBatchParams, CommitBatchResult } from "./batch";
+import { attributionSuffix, providerChainId, resolveBuilderCode, sendAttributed } from "./attribution";
 
 export * from "./batch";
+export * from "./attribution";
 
 // ─── Network Config ───────────────────────────────────────────────────────────
 //
@@ -145,6 +147,12 @@ export interface AgentAuditConfig {
   incidentRegistryAddress?: string;
   /** PostMarketMonitor contract address (Art. 72) */
   postMarketMonitorAddress?: string;
+  /**
+   * Base Builder Code (ERC-8021) appended to the calldata of this SDK's contract
+   * calls on Base / Base Sepolia only. Omitted: AgentAudit's code (`bc_pd681w25`).
+   * `false`: no suffix. A string: your own code. See README "Base Builder Code attribution".
+   */
+  builderCode?: string | false;
 }
 
 export interface LogActionParams {
@@ -231,9 +239,11 @@ export class AgentAudit implements BatchCommitter {
   private _postMarketMonitor?: ethers.Contract;
 
   private config: AgentAuditConfig;
+  private builderCode: string | null;
 
   constructor(config: AgentAuditConfig) {
     this.config = config;
+    this.builderCode = resolveBuilderCode(config.builderCode);
     this.networkName = config.network ?? "base";
     this.network = NETWORKS[this.networkName];
 
@@ -325,6 +335,11 @@ export class AgentAudit implements BatchCommitter {
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
+  /** Every state-changing call goes through here (Builder Code suffix on Base only). */
+  private send(contract: ethers.Contract, method: string, ...args: unknown[]): Promise<ethers.ContractTransactionResponse> {
+    return sendAttributed(contract, method, args, this.builderCode);
+  }
+
   private hashPayload(payload: string | object): string {
     const str = typeof payload === "string" ? payload : JSON.stringify(payload);
     return ethers.keccak256(ethers.toUtf8Bytes(str));
@@ -364,7 +379,7 @@ export class AgentAudit implements BatchCommitter {
     const risk = this.riskToUint(params.riskLevel);
     const agentId = String(params.agentId);
 
-    const tx = await this.auditVault.logAction(agentId, params.actionType, payloadHash, risk);
+    const tx = await this.send(this.auditVault, "logAction", agentId, params.actionType, payloadHash, risk);
     await tx.wait();
 
     return {
@@ -392,7 +407,7 @@ export class AgentAudit implements BatchCommitter {
     const payloadHashes = actions.map(a => this.hashPayload(a.payload));
     const riskLevels    = actions.map(a => this.riskToUint(a.riskLevel));
 
-    const tx = await this.auditVault.logActionBatch(String(agentId), actionTypes, payloadHashes, riskLevels);
+    const tx = await this.send(this.auditVault, "logActionBatch", String(agentId), actionTypes, payloadHashes, riskLevels);
     await tx.wait();
 
     return {
@@ -417,7 +432,9 @@ export class AgentAudit implements BatchCommitter {
    */
   async commitBatch(params: CommitBatchParams): Promise<CommitBatchResult> {
     const vault = this.auditVaultV2;
-    const tx = await vault.commitBatch(
+    const tx = await this.send(
+      vault,
+      "commitBatch",
       params.agentAddress,
       params.merkleRoot,
       params.contentURI,
@@ -464,7 +481,9 @@ export class AgentAudit implements BatchCommitter {
     spendLimit?: bigint;
     auditVault?: string;
   }): Promise<RegisterAgentResult> {
-    const tx = await this.registration.registerAgent(
+    const tx = await this.send(
+      this.registration,
+      "registerAgent",
       params.name,
       params.complianceLevel ?? "limited",
       params.spendLimit ?? ethers.parseEther("100"),
@@ -480,7 +499,7 @@ export class AgentAudit implements BatchCommitter {
    * Revoke an agent
    */
   async revokeAgent(agentId: number): Promise<{ txHash: string }> {
-    const tx = await this.registration.revokeAgent(agentId);
+    const tx = await this.send(this.registration, "revokeAgent", agentId);
     await tx.wait();
     return { txHash: tx.hash };
   }
@@ -517,7 +536,9 @@ export class AgentAudit implements BatchCommitter {
     // Block time, not Date.now(): the registry rejects occurredAt > block.timestamp
     const occurredAt = params.occurredAt ?? (await this.provider.getBlock("latest"))!.timestamp;
 
-    const tx = await registry.registerIncident(
+    const tx = await this.send(
+      registry,
+      "registerIncident",
       this.incidentAgentId(params.agentId),
       severity,
       harmType,
@@ -550,7 +571,9 @@ export class AgentAudit implements BatchCommitter {
     params: { authority: string; authorityRef: string }
   ): Promise<{ txHash: string; withinDeadline: boolean }> {
     const registry = await this.incidentRegistry();
-    const tx = await registry.markReportedToAuthority(
+    const tx = await this.send(
+      registry,
+      "markReportedToAuthority",
       incidentId,
       ethers.getAddress(params.authority),
       params.authorityRef
@@ -621,7 +644,9 @@ export class AgentAudit implements BatchCommitter {
     riskCategory: string;
     reviewIntervalDays: number;
   }): Promise<{ txHash: string }> {
-    const tx = await this.postMarketMonitor.enroll(
+    const tx = await this.send(
+      this.postMarketMonitor,
+      "enroll",
       params.agentAddress,
       params.systemName,
       params.riskCategory,
@@ -643,7 +668,9 @@ export class AgentAudit implements BatchCommitter {
     context?: string;
     txRef?: string;
   }): Promise<{ txHash: string }> {
-    const tx = await this.postMarketMonitor.recordMetric(
+    const tx = await this.send(
+      this.postMarketMonitor,
+      "recordMetric",
       params.agentAddress,
       this.metricTypeToUint(params.metricType),
       params.metricName,
@@ -665,7 +692,9 @@ export class AgentAudit implements BatchCommitter {
     complianceScore: number;
     notes: string;
   }): Promise<{ txHash: string }> {
-    const tx = await this.postMarketMonitor.recordReview(
+    const tx = await this.send(
+      this.postMarketMonitor,
+      "recordReview",
       params.agentAddress,
       params.complianceScore,
       params.notes
@@ -689,6 +718,20 @@ export class AgentAudit implements BatchCommitter {
    */
   getNetworkInfo() {
     return { name: this.networkName, ...this.network };
+  }
+
+  /**
+   * Base Builder Code this instance appends on Base / Base Sepolia, or null when disabled
+   */
+  getBuilderCode(): string | null {
+    return this.builderCode;
+  }
+
+  /**
+   * The exact calldata suffix this instance appends on the RPC's actual chain ("0x" = none)
+   */
+  async getAttributionSuffix(): Promise<string> {
+    return attributionSuffix(this.builderCode, await providerChainId(this.provider));
   }
 
   /**

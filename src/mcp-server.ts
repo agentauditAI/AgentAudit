@@ -11,7 +11,10 @@ import {
   BatchBuffer,
   MemoryBatchStore,
   NETWORKS as SDK_NETWORKS,
+  builderCodeFromEnv,
   canonicalize,
+  resolveBuilderCode,
+  sendAttributed,
   sha256Hex,
   type ActionPreimage,
   type BatchCommitter,
@@ -61,6 +64,12 @@ export interface McpServerOptions {
   auditVaults?: Partial<Record<NetworkKey, string>>;
   /** Phase 7 address overrides; defaults come from deployments/phase7-<network>.json */
   phase7?: Partial<Record<NetworkKey, Partial<Record<Phase7Contract, string>>>>;
+  /**
+   * Base Builder Code (ERC-8021) appended to audit_action / report_incident calldata on
+   * Base and Base Sepolia only (env AGENTAUDIT_BUILDER_CODE). Omitted: AgentAudit's code
+   * `bc_pd681w25`. `false`: no suffix. A string: your own code.
+   */
+  builderCode?: string | false;
 }
 
 /** Options read from the environment — what the stdio entry point uses */
@@ -73,7 +82,8 @@ export function optionsFromEnv(env: NodeJS.ProcessEnv = process.env): McpServerO
     const vault = env[`AUDIT_VAULT_${net.toUpperCase()}`];
     if (vault) auditVaults[net] = vault;
   }
-  return { privateKey: env.PRIVATE_KEY, rpcUrls, auditVaults };
+  // unset or "" → default code; "false" / "off" / "0" → off; anything else → custom code
+  return { privateKey: env.PRIVATE_KEY, rpcUrls, auditVaults, builderCode: builderCodeFromEnv(env.AGENTAUDIT_BUILDER_CODE) };
 }
 
 // ─── ABIs ────────────────────────────────────────────────────────────────────
@@ -130,6 +140,8 @@ function errorMessage(err: unknown): string {
 
 export function createServer(options: McpServerOptions = optionsFromEnv()): McpServer {
   const rpcUrl = (net: NetworkKey) => options.rpcUrls?.[net] ?? DEFAULT_RPC_URLS[net];
+  // Validated at startup so a bad AGENTAUDIT_BUILDER_CODE fails fast
+  const builderCode = resolveBuilderCode(options.builderCode);
 
   const providers = new Map<NetworkKey, ethers.JsonRpcProvider>();
   // cacheTimeout -1: back-to-back writes must not reuse a cached nonce
@@ -201,7 +213,13 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
       const vault = auditVault(network);
       await requireCode(network, vault, "AuditVault v2");
 
-      const sdk = new AgentAudit({ privateKey: privateKey(), network, rpcUrl: rpcUrl(network), auditVaultAddress: vault });
+      const sdk = new AgentAudit({
+        privateKey: privateKey(),
+        network,
+        rpcUrl: rpcUrl(network),
+        auditVaultAddress: vault,
+        builderCode: builderCode ?? false,
+      });
       const agentAddress = agent_address ? ethers.getAddress(agent_address) : sdk.getAddress();
 
       // One buffer per call, flushed once. The committer is one-shot so the
@@ -519,15 +537,15 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
       const signer = new ethers.Wallet(privateKey(), provider(network));
       const contract = new ethers.Contract(addr, INCIDENT_ABI, signer);
 
-      const tx = await contract.registerIncident(
+      const tx = await sendAttributed(contract, "registerIncident", [
         agentId,
         severityIdx,
         harmTypeIdx,
         description,
         evidence_hash,
         affected_persons,
-        occurred_at
-      );
+        occurred_at,
+      ], builderCode);
       const receipt = await tx.wait();
 
       // Only an IncidentRegistered from the registry itself counts as registration
