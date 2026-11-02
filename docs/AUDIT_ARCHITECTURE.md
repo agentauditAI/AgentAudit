@@ -33,12 +33,18 @@ AgentAudit provides tamper-evident audit logging for AI agents. Each logged acti
 
 ## Supported Networks
 
-| Network | Status | Contract |
-|---------|--------|----------|
-| Mantle Mainnet | ✅ Live (v1) | `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b` |
-| Mantle Mainnet | ✅ Live (v2) | `0x68769980879414e8f264Ac15a87813E2ABaBaD6e` |
-| Mantle Mainnet | Not verified (v2, AgentAuditBatch) | Not recorded — see `deployments/` |
-| Arbitrum One | 🔄 Planned | TBD |
+Verified on-chain (`eth_getCode` plus a contract-specific function selector) on 2026-11-02. Addresses come from `deployments/`.
+
+| Contract | Network(s) | Address | Status |
+|---|---|---|---|
+| AuditVault v2 (batch logging, Merkle roots) | Base | `0xCeE831070aa9081422f30df5559c125aa47A75DB` | Live — batch logging is on Base only |
+| IncidentRegistry v2 (Art. 73) | Base, Arbitrum One, Mantle, Polygon | `0x6ad45a9B32e695e95492dC3796a5aC8543B2EA6F` | Live |
+| IncidentRegistry v2 (Art. 73) | Optimism | `0x976b03a2417cf7926813605F427ED499fdF61e10` | Live |
+| AuditVault v1 (per-action logs) | Mantle | `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b` | Live |
+| AgentRegistration (KYA) | Mantle | `0x68769980879414e8f264Ac15a87813E2ABaBaD6e` | Live |
+| AuditVault v3 | — | — | Implemented and tested, not deployed (design: `docs/design/AUDITVAULT_V3.md`; target Base + Celo) |
+
+AgentAuditBatch (section 3) has no recorded address in `deployments/` and is not listed here.
 
 ## Design Principles
 
