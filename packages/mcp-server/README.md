@@ -37,6 +37,7 @@ Example MCP client config:
 | `PRIVATE_KEY` | `audit_action`, `report_incident` | Signer for write tools. Not needed for read tools. Never commit it. |
 | `RPC_MANTLE`, `RPC_BASE`, `RPC_ARBITRUM`, `RPC_OPTIMISM`, `RPC_POLYGON` | all tools | Optional RPC overrides; public RPCs are used by default |
 | `AUDIT_VAULT_<NETWORK>` | `audit_action`, `get_audit_log`, `verify_proof` | Points a network at an AuditVault v2 deployment. Without it, every network except Base returns an error. |
+| `AGENTAUDIT_BUILDER_CODE` | `audit_action`, `report_incident` | Base Builder Code attribution, on Base / Base Sepolia only. Unset or empty: AgentAudit's code `bc_pd681w25`. `false`, `off` or `0` (any case): no suffix. Any other value: your own code. See below. |
 
 The server also loads a `.env` file from the working directory (dotenv). Variables already set in the environment take precedence.
 
@@ -66,6 +67,23 @@ Registers a serious incident on IncidentRegistry v2 (Art. 73). Before sending, i
 ### `get_compliance_report`, `get_risk_score`, `check_conformity` (read)
 
 Read the Phase 7 contracts: ConformityAssessment (Art. 43, 44), RiskManagementSystem (Art. 9) and IncidentRegistry (Art. 73). If a contract has no code on the selected network, the tool returns an error naming the network and address.
+
+## Base Builder Code attribution
+
+On **Base mainnet (8453) and Base Sepolia (84532) only**, the write tools (`audit_action`,
+`report_incident`) append a [Base Builder Code](https://docs.base.org/base-chain/builder-codes/builder-codes)
+suffix (ERC-8021, schema 0) to their transaction calldata. It is on by default with
+AgentAudit's code `bc_pd681w25`, so Base can attribute these transactions to AgentAudit.
+
+- **What is appended:** 29 bytes, `0x62635f70643638317732350b0080218021802180218021802180218021`
+  (`"bc_pd681w25"`, length `0x0b`, schema `0x00`, then the marker `0x8021` × 8).
+- **What stays the same:** the contracts ignore the suffix, so events and state are
+  identical, and no evidence changes (`action_ref`, Merkle root, bundle). Only the tx hash differs.
+- **The code is public** on-chain. The chain is read from the RPC (`eth_chainId`);
+  other chains never get a suffix.
+- **Turn it off:** `AGENTAUDIT_BUILDER_CODE=false`. **Use your own code:**
+  `AGENTAUDIT_BUILDER_CODE=bc_yourcode` (ERC-8021 rules: 7-bit ASCII, no comma, ≤ 255 bytes;
+  an invalid value stops the server at startup).
 
 ## Caveat: AuditVault v2 does not authenticate submitters
 
