@@ -57,6 +57,16 @@ no `commitBatch(address,bytes32,string,uint256,uint8)`; see `sdk/README.md` → 
 |---|---|---|---|
 | Robinhood Chain Testnet | AuditVault v2 | `0x6B5BebC2f9172c6E17Df5ea59C1753D360866bDB` | 46630 |
 
+## Base Builder Code attribution
+
+The SDK (`@agentauditai/sdk`) and the MCP server (`@agentauditai/mcp-server`) append a
+Base Builder Code suffix (ERC-8021) to the calldata of their own contract calls, **on Base
+mainnet and Base Sepolia only**, using AgentAudit's public code `bc_pd681w25`. The
+contracts ignore the suffix, and no audit evidence (`action_ref`, Merkle root, bundle)
+changes. Turn it off with `builderCode: false` (SDK) or `AGENTAUDIT_BUILDER_CODE=false`
+(MCP), or pass your own code. Details: [sdk/README.md](sdk/README.md#base-builder-code-attribution)
+and [packages/mcp-server/README.md](packages/mcp-server/README.md#base-builder-code-attribution).
+
 ## Foundry
 
 **Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**

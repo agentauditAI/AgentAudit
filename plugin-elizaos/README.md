@@ -65,6 +65,10 @@ configured address is not an IncidentRegistry v2, the action returns `false` wit
 
 Never commit private keys — keep them in a gitignored `.env`.
 
+> **TODO (next plugin release):** the plugin inherits SDK Builder Code attribution
+> (ERC-8021 suffix with AgentAudit's code `bc_pd681w25`, Base / Base Sepolia only; see the
+> SDK README "Base Builder Code attribution"). Pass `builderCode` to override.
+
 ## Networks — batch anchoring support
 
 > **Set `AUDIT_NETWORK=base` for batch logging.** The default network stays
