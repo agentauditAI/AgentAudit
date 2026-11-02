@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AgentAudit AI — On-Chain EU AI Act Compliance for Autonomous Agents</title>
+  <title>AgentAudit AI — Tamper-Evident Audit Evidence for Autonomous Agents</title>
   <meta name="description" content="Tamper-evident, anchored on-chain audit trails for autonomous AI agents. Batch logging live on Base; incident reporting on 5 networks. Know Your Agent — before it acts on your behalf." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -77,19 +77,8 @@
 
     .tagline { font-family: var(--mono); font-size: clamp(0.9rem, 2vw, 1.05rem); color: var(--text-dim); max-width: 580px; line-height: 1.7; margin-bottom: 2rem; }
 
-    /* ── Countdown bar ── */
-    .countdown-bar {
-      display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center;
-      margin-bottom: 3rem;
-    }
-    .countdown-item {
-      display: flex; flex-direction: column; align-items: center;
-      background: var(--surface); border: 1px solid var(--border);
-      padding: 0.75rem 1.25rem; min-width: 140px;
-    }
-    .countdown-days { font-family: var(--mono); font-size: 1.8rem; font-weight: 600; color: var(--green); line-height: 1; }
-    .countdown-label { font-family: var(--mono); font-size: 0.65rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 0.3rem; }
-    .countdown-sub { font-family: var(--mono); font-size: 0.62rem; color: var(--amber); letter-spacing: 0.08em; margin-top: 0.15rem; }
+    /* ── Timeline note ── */
+    .timeline-note { font-family: var(--mono); font-size: 0.75rem; color: var(--amber); letter-spacing: 0.04em; margin-bottom: 3rem; }
 
     .cta-group { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
 
@@ -158,7 +147,7 @@
     .compliance-table td:first-child { color: var(--green); white-space: nowrap; }
     .compliance-table tr:last-child td { border-bottom: none; }
     .tag-live { font-size: 0.62rem; background: var(--green-glow); color: var(--green); border: 1px solid rgba(0,255,136,0.3); padding: 0.1rem 0.4rem; letter-spacing: 0.08em; margin-left: 0.4rem; vertical-align: middle; }
-    .tag-ph7 { font-size: 0.62rem; background: rgba(255,184,0,0.1); color: var(--amber); border: 1px solid rgba(255,184,0,0.3); padding: 0.1rem 0.4rem; letter-spacing: 0.08em; margin-left: 0.4rem; vertical-align: middle; }
+    .tag-ph7, .tag-planned { font-size: 0.62rem; background: rgba(255,184,0,0.1); color: var(--amber); border: 1px solid rgba(255,184,0,0.3); padding: 0.1rem 0.4rem; letter-spacing: 0.08em; margin-left: 0.4rem; vertical-align: middle; }
 
     /* ── Plugins ── */
     .plugins-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5px; background: var(--border); border: 1px solid var(--border); margin-top: 2rem; }
@@ -248,29 +237,11 @@
       Know Your Agent — before it acts on your behalf.
     </p>
 
-    <!-- Dynamic countdown -->
-    <div class="countdown-bar" id="countdownBar">
-      <div class="countdown-item">
-        <div class="countdown-days" id="days50">—</div>
-        <div class="countdown-label">Art. 50 · Transparency</div>
-        <div class="countdown-sub">Aug 2, 2026</div>
-      </div>
-      <div class="countdown-item">
-        <div class="countdown-days" id="daysMiCA">—</div>
-        <div class="countdown-label">MiCA Enforcement</div>
-        <div class="countdown-sub">Jul 1, 2026</div>
-      </div>
-      <div class="countdown-item">
-        <div class="countdown-days" id="daysAnnex">—</div>
-        <div class="countdown-label">Annex III High-Risk</div>
-        <div class="countdown-sub">Dec 2, 2027</div>
-      </div>
-    </div>
+    <p class="timeline-note">Annex III high-risk obligations apply from 2 Dec 2027 (Digital Omnibus).</p>
 
     <div class="cta-group">
-      <a href="https://getagentaudit.xyz/dashboard.html" class="btn-primary">Open Dashboard</a>
+      <a href="#wave1" class="btn-primary">Get Free Pilot →</a>
       <a href="https://github.com/agentauditAI/AgentAudit" class="btn-ghost" target="_blank">View on GitHub</a>
-      <a href="#wave1" class="btn-ghost">Get Free Pilot →</a>
     </div>
 
     <div class="log-stream">
@@ -346,7 +317,7 @@
       <div class="feature">
         <div class="feature-icon">🔗</div>
         <h3>Tamper-evident, anchored on-chain</h3>
-        <p>Every action hashed; batches anchored on-chain. No admin key. No delete function. No exceptions. Batch logging live on Base, one SDK.</p>
+        <p>Every logged action hashed; batches anchored on-chain. AuditVault v2 has no admin key and no delete function. Batch logging live on Base, one SDK.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">🔐</div>
@@ -356,7 +327,7 @@
       <div class="feature">
         <div class="feature-icon">🇪🇺</div>
         <h3>EU AI Act Native</h3>
-        <p>Supports evidence for Articles 9, 11, 12, 13, 14, 19, 26, 72, 73. Legal co-founder with EU AI Act expertise.</p>
+        <p>Supports evidence for Articles 9, 11, 12, 13, 14, 19, 26, 73. Legal co-founder with EU AI Act expertise.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">🤖</div>
@@ -381,8 +352,8 @@
     <div class="section-label">// Compliance Coverage</div>
     <h2>Built article by article.</h2>
     <p class="section-sub">
-      Every EU AI Act requirement mapped to a specific on-chain contract.
-      Not a checkbox — a tamper-evident evidence layer.
+      EU AI Act articles our contracts support or provide evidence for.
+      Not a compliance checkbox — a tamper-evident evidence layer.
     </p>
     <table class="compliance-table">
       <thead>
@@ -396,7 +367,7 @@
         <tr>
           <td>Art. 9<span class="tag-live">LIVE</span></td>
           <td>Risk management system</td>
-          <td>AuditVault + Risk Scoring HIGH/MEDIUM/LOW</td>
+          <td>RiskManagementSystem.sol — on-chain risk register</td>
         </tr>
         <tr>
           <td>Art. 11<span class="tag-live">LIVE</span></td>
@@ -411,37 +382,37 @@
         <tr>
           <td>Art. 13<span class="tag-live">LIVE</span></td>
           <td>Transparency and information to users</td>
-          <td>Every action timestamped, publicly readable on-chain</td>
+          <td>Anchored batch roots timestamped and publicly verifiable on-chain</td>
         </tr>
         <tr>
           <td>Art. 14<span class="tag-live">LIVE</span></td>
           <td>Human oversight</td>
-          <td>Dashboard + on-chain override mechanisms</td>
+          <td>HumanOversightRegistry.sol — oversight plans and logged human interventions</td>
         </tr>
         <tr>
           <td>Art. 19<span class="tag-live">LIVE</span></td>
           <td>Logging requirements</td>
-          <td>Automatic per-action logging via AuditVault</td>
+          <td>Automatic logging via the SDK; Merkle roots anchored on AuditVault (Base)</td>
         </tr>
         <tr>
           <td>Art. 26<span class="tag-live">LIVE</span></td>
           <td>Obligations for deployers</td>
-          <td>AgentRegistration + KYA fields enforced on-chain</td>
+          <td>AgentRegistration + KYA fields recorded on-chain (Mantle)</td>
         </tr>
         <tr>
-          <td>Art. 50<span class="tag-live">LIVE</span></td>
+          <td>Art. 50<span class="tag-planned">PLANNED</span></td>
           <td>AI content transparency</td>
           <td>Decision Provenance + on-chain logs</td>
         </tr>
         <tr>
-          <td>Art. 72<span class="tag-live">LIVE</span></td>
+          <td>Art. 72<span class="tag-planned">PLANNED</span></td>
           <td>Post-market monitoring</td>
           <td>PostMarketMonitor.sol — continuous activity log</td>
         </tr>
         <tr>
           <td>Art. 73<span class="tag-live">LIVE</span></td>
           <td>Incident reporting (15/10/2 day timelines)</td>
-          <td>IncidentRegistry.sol — automated reporting</td>
+          <td>IncidentRegistry.sol — on-chain incident records with 15/10/2-day deadline tracking</td>
         </tr>
       </tbody>
     </table>
@@ -450,10 +421,10 @@
   <!-- INTEGRATIONS / PLUGINS -->
   <section id="integrations">
     <div class="section-label">// Integrations</div>
-    <h2>Plug in. Stay compliant.</h2>
+    <h2>Plug in. Keep the evidence.</h2>
     <p class="section-sub">
       Drop-in integrations for the most popular AI agent frameworks.
-      One SDK, any chain, any runtime.
+      One SDK, any runtime. Batch logging live on Base.
     </p>
     <div class="plugins-grid">
       <div class="plugin-card">
@@ -474,7 +445,7 @@
           <div class="plugin-name">LangChain Handler</div>
           <div class="plugin-status live">Live</div>
         </div>
-        <p class="plugin-desc">Callback handler for LangChain agents. Every LLM call, tool use, and chain step logged on-chain automatically.</p>
+        <p class="plugin-desc">Callback handler for LangChain agents: each LLM call is hashed and anchored on-chain in Merkle batches.</p>
         <div class="plugin-code">
           <span class="kw">const</span> chain = <span class="kw">new</span> AgentExecutor({<br />
           &nbsp;&nbsp;callbacks: [<span class="kw">new</span> AgentAuditHandler()]<br />
@@ -581,7 +552,6 @@
       </div>
       <div class="cta-group" style="justify-content:center">
         <a href="mailto:hello@getagentaudit.xyz?subject=Design Partner Pilot" class="btn-primary">Apply for Free Pilot</a>
-        <a href="https://getagentaudit.xyz/dashboard.html" class="btn-ghost">See Dashboard</a>
       </div>
       <div class="spots-left">Open now · limited spots · no cost</div>
     </div>
@@ -592,12 +562,11 @@
       <div class="footer-top">
         <div>
           <div class="footer-brand">AgentAudit AI</div>
-          <div class="footer-tagline">A RunLockAI product. On-chain EU AI Act compliance for autonomous AI agents.</div>
+          <div class="footer-tagline">A RunLockAI product. Tamper-evident audit evidence for autonomous AI agents.</div>
         </div>
         <div class="footer-links">
           <div class="footer-col">
             <div class="footer-col-title">Product</div>
-            <a href="https://getagentaudit.xyz/dashboard.html">Dashboard</a>
             <a href="#quickstart">SDK Docs</a>
             <a href="#integrations">Integrations</a>
             <a href="https://github.com/agentauditAI/AgentAudit" target="_blank">GitHub (MIT)</a>
@@ -626,28 +595,6 @@
   </footer>
 
   <script>
-    // Dynamic countdown
-    function daysUntil(dateStr) {
-      const target = new Date(dateStr);
-      const now = new Date();
-      now.setHours(0,0,0,0);
-      target.setHours(0,0,0,0);
-      const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
-      return diff;
-    }
-
-    function updateCountdowns() {
-      const d50 = daysUntil('2026-08-02');
-      const dMiCA = daysUntil('2026-07-01');
-      const dAnnex = daysUntil('2027-12-02');
-
-      document.getElementById('days50').textContent = d50 > 0 ? d50 : 'LIVE';
-      document.getElementById('daysMiCA').textContent = dMiCA > 0 ? dMiCA : 'LIVE';
-      document.getElementById('daysAnnex').textContent = dAnnex > 0 ? dAnnex : 'LIVE';
-    }
-
-    updateCountdowns();
-
     // Animated log stream — live timestamps
     const actions = [
       'TRANSFER_APPROVED', 'RISK_SCORE_HIGH', 'ZK_PROOF_VERIFIED',
