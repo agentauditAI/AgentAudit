@@ -6,7 +6,7 @@
 2. Username: agentaudit-lab (lub podobny)
 3. "New repository" →
    - Name: AgentAudit
-   - Description: Immutable on-chain audit logs for AI agents. EU AI Act compliant.
+   - Description: Tamper-evident, on-chain-anchored audit logs for AI agents.
    - Public ✅
    - NIE dodawaj README (mamy własny)
    - License: MIT

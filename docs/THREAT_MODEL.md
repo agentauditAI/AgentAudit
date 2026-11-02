@@ -32,7 +32,7 @@ This document identifies key threats to AI agent security and explains how Agent
 
 ### 7. Regulatory Non-Compliance
 **Threat:** AI agent operates without meeting EU AI Act obligations.
-**Mitigation:** Full KYA registration + AuditVault logging satisfies Articles 9, 12, 13, 19, 26, 72.
+**Mitigation:** Full KYA registration + AuditVault logging supports, and provides evidence for, the record-keeping and logging obligations of Art. 12, 19 and 26. It does not by itself make a system compliant.
 
 ## Known issues — AuditVault v2
 

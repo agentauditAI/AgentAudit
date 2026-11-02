@@ -1,7 +1,7 @@
 {
   "name": "agentaudit",
   "version": "0.1.0",
-  "description": "Immutable on-chain audit logs for AI agents.",
+  "description": "Tamper-evident, on-chain-anchored audit logs for AI agents.",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",

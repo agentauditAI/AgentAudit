@@ -1,6 +1,6 @@
 # AgentAudit
 
-> On-chain EU AI Act compliance infrastructure for autonomous AI agents —
+> Tamper-evident evidence infrastructure for autonomous AI agents (supports EU AI Act Art. 12/19/26) —
 > the audit, registration, and incident-reporting layer for ERC-8004.
 
 AgentAudit supports Art. 12 (record-keeping) and Art. 19 (log retention) evidence:

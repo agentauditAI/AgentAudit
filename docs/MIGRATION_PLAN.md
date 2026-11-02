@@ -100,7 +100,7 @@ Target structure:
 - `scripts/`
 - `docs/` (KYA_STANDARD, AUDIT_ARCHITECTURE, COMPLIANCE_MAPPING, THREAT_MODEL, MIGRATION_PLAN)
 - `website/` (index.html, CNAME)
-- `README.md`, `PITCH.md`, `LICENSE`
+- `README.md`, `LICENSE`
 
 Tasks:
 

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-AgentAudit is an on-chain compliance infrastructure for AI agents under the EU AI Act (enforcement deadline: **August 2, 2026**). It provides immutable audit logs, Know Your Agent (KYA) registration, post-market monitoring, and incident tracking as Solidity smart contracts.
+AgentAudit is on-chain evidence infrastructure for AI agents: it supports, and provides evidence for, EU AI Act Art. 12/19/26 (and 73 via IncidentRegistry). Annex III high-risk obligations apply from 2 Dec 2027 (Digital Omnibus; Legal confirms timing). It provides tamper-evident audit logs (hashes only; Merkle roots anchored on-chain), Know Your Agent (KYA) registration, post-market monitoring, and incident tracking as Solidity smart contracts.
 
 - **v1**: `contracts/v1/AuditVault_v1.sol` — legacy, deployed on Mantle Mainnet
 - **v2**: `contracts/v2/` — active development, multi-contract compliance stack

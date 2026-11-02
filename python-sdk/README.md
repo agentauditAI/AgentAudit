@@ -1,6 +1,6 @@
 # agentauditai-sdk
 
-On-chain EU AI Act compliance for AI agents — immutable audit logs, Know Your Agent (KYA) registration, incident reporting, and post-market monitoring across 5 EVM networks.
+Evidence for EU AI Act record-keeping (supports Art. 12/19/26) for AI agents: on-chain audit logs, KYA registration, incident reporting and post-market monitoring. See "Supported networks" for what is live where.
 
 **Enforcement deadline: August 2, 2026.**
 
