@@ -1,6 +1,6 @@
 # AgentAudit plugin for ElizaOS
 
-On-chain EU AI Act compliance logging for ElizaOS agents, built on
+Tamper-evident audit logging for ElizaOS agents (evidence for EU AI Act record-keeping), built on
 [`@agentauditai/sdk`](https://www.npmjs.com/package/@agentauditai/sdk).
 
 Audit logs are **batch-anchored**: every logged action becomes one `action_ref`

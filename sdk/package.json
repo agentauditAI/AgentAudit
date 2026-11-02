@@ -1,7 +1,7 @@
 {
   "name": "@agentauditai/sdk",
   "version": "1.1.2",
-  "description": "On-chain EU AI Act compliance SDK for AI agents \u2014 immutable audit logs, KYA registration, incident reporting, post-market monitoring.",
+  "description": "Tamper-evident evidence SDK for AI agents (supports EU AI Act Art. 12/19/26) \u2014 Merkle-batched audit logs anchored on-chain, KYA registration, incident reporting, post-market monitoring.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

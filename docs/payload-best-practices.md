@@ -1,8 +1,8 @@
 Payload Best Practices — Privacy Without Losing Compliance
 AuditVault logs are public on-chain. Never write sensitive business logic in plaintext.
-Use hashed payloads — EU AI Act compliance only requires proof that the log existed, not full data exposure.
+Use hashed payloads: the on-chain anchor only has to show that a log record existed unchanged; the full record stays in your own storage for the retention period.
 > **Rule of thumb:** Store full data in your private database. Log only the hash on-chain.
-> Compliance = proof of existence, not proof of content.
+> The anchor proves a record's existence and integrity, not its content.
 ---
 ❌ What NOT to do
 ```typescript
@@ -67,12 +67,11 @@ Regulator:
   hash(private data) === on-chain hash? ✅ → log verified
 ```
 ---
-EU AI Act articles satisfied
-Article	Requirement	How hashed logging satisfies it
-Art. 13	Transparency	Log proves action occurred at exact timestamp
-Art. 14	Human oversight	Authorized agent ID and caller recorded
-Art. 15	Accuracy	Tamper-evident record — anchored on-chain, any change is detectable
-Art. 17	Record-keeping	On-chain hash + off-chain data = full audit trail
+EU AI Act articles this supports (evidence, not compliance)
+Article	Requirement	How hashed logging provides evidence
+Art. 12	Record-keeping (automatic event logging)	Logging is automatic; the anchored hash makes any later change to a record detectable
+Art. 19	Automatically generated logs	Full records stay off-chain and remain verifiable against the anchors; retention is the operator's job
+Art. 26	Deployer obligations	Deployer-held logs that third parties can verify
 ---
 Quick reference — recommended actionType values
 Use generic, non-revealing action type labels:
@@ -130,4 +129,4 @@ await sdk.logAction({
 });
 ```
 ---
-AgentAudit — getagentaudit.xyz | Immutable on-chain audit logs for AI agents.
+AgentAudit — getagentaudit.xyz | Tamper-evident, on-chain-anchored audit logs for AI agents.

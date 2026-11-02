@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "agentauditai-sdk"
 version = "2.0.0"
-description = "On-chain EU AI Act compliance SDK for AI agents — immutable audit logs, KYA registration, incident reporting, post-market monitoring across 5 EVM networks."
+description = "Evidence SDK for AI agents (supports EU AI Act record-keeping, Art. 12/19/26) — on-chain audit logs, KYA registration, incident reporting, post-market monitoring."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "agentauditAI" }]

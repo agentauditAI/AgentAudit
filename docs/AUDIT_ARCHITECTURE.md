@@ -2,7 +2,7 @@
 
 ## Overview
 
-AgentAudit provides immutable, on-chain audit logging for AI agents. Every action taken by a registered agent is recorded on-chain and cannot be altered or deleted.
+AgentAudit provides tamper-evident audit logging for AI agents. Each logged action is hashed (action_ref) and batches are anchored on-chain as a Merkle root, so any later change to a logged record is detectable. Only actions the agent actually logs are covered; AuditVault v2 anchors show that a root existed at block T, not who committed it.
 
 ## Core Components
 
@@ -19,7 +19,7 @@ AgentAudit provides immutable, on-chain audit logging for AI agents. Every actio
 ### 3. AgentAuditBatch.sol (v2 — deployed)
 - Gas-optimized batch logging
 - Supports high-frequency agent activity
-- Deployed on Mantle Mainnet: `0xAF9ccA0C3D79900576557329F57824A0e277`
+- Mantle Mainnet address: not recorded in `deployments/` (the address previously listed here was malformed); see `deployments/` for verified deployment records
 
 ### 4. TypeScript SDK (@agentaudit-xyz/sdk)
 - Developer interface for agent registration and log submission
@@ -37,7 +37,7 @@ AgentAudit provides immutable, on-chain audit logging for AI agents. Every actio
 |---------|--------|----------|
 | Mantle Mainnet | ✅ Live (v1) | `0xD0086f19eDb500fB9d3382f6f5EAE1C015be054b` |
 | Mantle Mainnet | ✅ Live (v2) | `0x68769980879414e8f264Ac15a87813E2ABaBaD6e` |
-| Mantle Mainnet | ✅ Live (v2) | `0xAF9ccA0C3D79900576557329F57824A0e277` |
+| Mantle Mainnet | Not verified (v2, AgentAuditBatch) | Not recorded — see `deployments/` |
 | Arbitrum One | 🔄 Planned | TBD |
 
 ## Design Principles

@@ -1,6 +1,6 @@
 # @agentauditai/sdk
 
-On-chain EU AI Act compliance for AI agents — immutable audit logs, Know Your Agent (KYA) registration, incident reporting, and post-market monitoring across 5 EVM networks.
+Tamper-evident evidence for AI agent actions, supporting EU AI Act Art. 12/19/26 (and 73): Merkle-batched audit logs anchored on-chain (live on Base), Know Your Agent (KYA) registration, incident reporting (IncidentRegistry v2 on 5 networks) and post-market monitoring.
 
 **Enforcement deadline: August 2, 2026.**
 

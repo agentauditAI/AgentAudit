@@ -11,7 +11,7 @@ AI agents are increasingly executing financial transactions, signing contracts, 
 KYA defines what every deployed AI agent must declare:
 - Who created it
 - What it is authorized to do
-- What it has done (immutable log)
+- What it has done (tamper-evident log)
 - Whether it complies with applicable regulations
 
 ## Core KYA Fields
@@ -31,9 +31,9 @@ KYA defines what every deployed AI agent must declare:
 ## KYA Lifecycle
 
 1. **Registration** — Agent is registered on-chain via `AgentRegistration.sol`
-2. **Operation** — Every action is logged to `AuditVault` (immutable)
+2. **Operation** — Actions are logged and anchored to `AuditVault` (tamper-evident)
 3. **Review** — Logs are queryable by regulators, auditors, or users
-4. **Revocation** — Agent can be deregistered; logs remain permanently
+4. **Revocation** — Agent can be deregistered; on-chain anchors remain
 
 ## Relationship to EU AI Act
 
@@ -47,8 +47,8 @@ KYA directly supports compliance with:
 
 ## Timeline
 
-EU AI Act enforcement for high-risk AI systems: **August 2, 2026**.
-AgentAudit provides compliance-ready infrastructure today.                             
+Annex III high-risk obligations apply from 2 Dec 2027 (Digital Omnibus).
+AgentAudit provides evidence infrastructure for these obligations today; it does not by itself make a system compliant.                             
 
 ## Version
 
