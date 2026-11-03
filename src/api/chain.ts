@@ -79,6 +79,14 @@ export class ContractConfigError extends Error {
   }
 }
 
+/** A write endpoint was called but no signing key is configured → 503 */
+export class SignerNotConfiguredError extends Error {
+  constructor() {
+    super("Write endpoints need a signing key: set PRIVATE_KEY on the server. Read endpoints work without it.");
+    this.name = "SignerNotConfiguredError";
+  }
+}
+
 function resolveAddress(envVar: string, fallback?: string): string | null {
   const value = process.env[envVar] || fallback || "";
   if (!value) return null;
@@ -102,15 +110,18 @@ export function getChainClient(network: Network) {
 
   const provider = new ethers.JsonRpcProvider(RPC_URLS[network]);
 
-  // Known issue: a key is required even for read-only calls (tracked separately).
-  const privateKey = process.env.PRIVATE_KEY;
-  if (!privateKey) throw new Error("PRIVATE_KEY env var not set");
-  const wallet = new ethers.Wallet(privateKey, provider);
-
-  const registration = new ethers.Contract(registrationAddress, REGISTRATION_ABI, wallet);
+  // Reads use the provider only, so read endpoints never need PRIVATE_KEY.
+  // The signer is created on demand by the one write path (logAction).
+  const registration = new ethers.Contract(registrationAddress, REGISTRATION_ABI, provider);
   const auditBatch = auditBatchAddress
-    ? new ethers.Contract(auditBatchAddress, AUDIT_BATCH_ABI, wallet)
+    ? new ethers.Contract(auditBatchAddress, AUDIT_BATCH_ABI, provider)
     : null;
+
+  function signer(): ethers.Wallet {
+    const privateKey = process.env.PRIVATE_KEY;
+    if (!privateKey) throw new SignerNotConfiguredError();
+    return new ethers.Wallet(privateKey, provider);
+  }
 
   return {
     registrationAddress,
@@ -118,8 +129,9 @@ export function getChainClient(network: Network) {
 
     async logAction(agentId: number, actionType: string, payload: string): Promise<string> {
       if (!auditBatch) throw auditBatchNotConfigured(network);
+      const writer = auditBatch.connect(signer()) as ethers.Contract;
       const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payload));
-      const tx = await auditBatch.logAction(agentId, actionType, payloadHash);
+      const tx = await writer.logAction(agentId, actionType, payloadHash);
       await tx.wait();
       return tx.hash as string;
     },

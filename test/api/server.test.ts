@@ -51,12 +51,19 @@ jest.mock("../../src/api/chain", () => {
       this.name = "ContractConfigError";
     }
   }
+  class SignerNotConfiguredError extends Error {
+    constructor() {
+      super("Write endpoints need a signing key: set PRIVATE_KEY on the server. Read endpoints work without it.");
+      this.name = "SignerNotConfiguredError";
+    }
+  }
 
   return {
     getChainClient: jest.fn().mockReturnValue(mockClient),
     getBaseVaultReader: jest.fn().mockReturnValue(mockVault),
     NetworkNotConfiguredError,
     ContractConfigError,
+    SignerNotConfiguredError,
     _mockClient: mockClient,
     _mockVault: mockVault,
     _registeredAgent: registeredAgent,
@@ -70,6 +77,7 @@ const {
   _registeredAgent: registeredAgent,
   NetworkNotConfiguredError,
   ContractConfigError,
+  SignerNotConfiguredError,
 } = require("../../src/api/chain");
 
 const API_KEY = "test-api-key";
@@ -199,6 +207,13 @@ describe("POST /v1/audit", () => {
     expect(res.status).toBe(503);
   });
 
+  it("returns 503 when no signing key is configured", async () => {
+    mockClient.logAction.mockRejectedValueOnce(new SignerNotConfiguredError());
+    const res = await request(app).post("/v1/audit").set(auth).send(validBody);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/set PRIVATE_KEY on the server/);
+  });
+
   it("returns 502 when chain tx fails", async () => {
     mockClient.logAction.mockRejectedValueOnce(new Error("RPC error"));
     const res = await request(app).post("/v1/audit").set(auth).send(validBody);
@@ -228,6 +243,13 @@ describe("GET /v1/audit/:agentId", () => {
   it("returns 400 for non-numeric agentId", async () => {
     const res = await request(app).get("/v1/audit/abc").set(auth);
     expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for an unknown ?network= without touching the chain module", async () => {
+    const res = await request(app).get("/v1/audit/1?network=ethereum").set(auth);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("network must be one of: mantle, base, arbitrum, optimism, polygon");
+    expect(getChainClient).not.toHaveBeenCalled();
   });
 
   it("returns 401 without auth", async () => {
@@ -472,6 +494,13 @@ describe("GET /v1/audit/:agentId/report", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 for an unknown ?network= without touching the chain module", async () => {
+    const res = await request(app).get("/v1/audit/1/report?network=ethereum").set(auth);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/^network must be one of:/);
+    expect(getChainClient).not.toHaveBeenCalled();
+  });
+
   it("returns 401 without auth", async () => {
     const res = await request(app).get("/v1/audit/1/report");
     expect(res.status).toBe(401);
@@ -537,10 +566,13 @@ describe("every API response contains no met / COMPLIANT / compliant / complianc
     ["POST /v1/audit invalid body", 400, () => request(app).post("/v1/audit").set(auth).send({ ...body, risk_level: "CRITICAL" })],
     ["POST /v1/audit not configured", 503, () => request(app).post("/v1/audit").set(auth).send(body), notConfigured],
     ["POST /v1/audit malformed address", 503, () => request(app).post("/v1/audit").set(auth).send(body), malformed],
+    ["POST /v1/audit no signing key", 503, () => request(app).post("/v1/audit").set(auth).send(body),
+      () => mockClient.logAction.mockRejectedValueOnce(new SignerNotConfiguredError())],
     ["POST /v1/audit chain failure", 502, () => request(app).post("/v1/audit").set(auth).send(body),
       () => mockClient.logAction.mockRejectedValueOnce(new Error("RPC error"))],
     ["GET /v1/audit/1", 200, () => request(app).get("/v1/audit/1").set(auth)],
     ["GET /v1/audit/abc", 400, () => request(app).get("/v1/audit/abc").set(auth)],
+    ["GET /v1/audit/1 unknown network", 400, () => request(app).get("/v1/audit/1?network=ethereum").set(auth)],
     ["GET /v1/audit/1 no auth", 401, () => request(app).get("/v1/audit/1")],
     ["GET /v1/audit/1 not configured", 503, () => request(app).get("/v1/audit/1").set(auth), notConfigured],
     ["GET /v1/audit/1 malformed address", 503, () => request(app).get("/v1/audit/1").set(auth), malformed],
@@ -558,6 +590,7 @@ describe("every API response contains no met / COMPLIANT / compliant / complianc
     ["GET report no events", 200, () => request(app).get("/v1/audit/1/report").set(auth),
       () => mockClient.getAuditTrail.mockResolvedValueOnce([])],
     ["GET report bad agentId", 400, () => request(app).get("/v1/audit/abc/report").set(auth)],
+    ["GET report unknown network", 400, () => request(app).get("/v1/audit/1/report?network=ethereum").set(auth)],
     ["GET report bad agent_address", 400, () => request(app).get("/v1/audit/1/report?agent_address=0x12").set(auth)],
     ["GET report no auth", 401, () => request(app).get("/v1/audit/1/report")],
     ["GET report not configured", 503, () => request(app).get("/v1/audit/1/report").set(auth), notConfigured],

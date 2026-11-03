@@ -1,12 +1,30 @@
 import { Router, Request, Response } from "express";
 import { validateBody } from "../middleware/validate";
 import { isAddress } from "ethers";
-import { getChainClient, getBaseVaultReader, NetworkNotConfiguredError, ContractConfigError } from "../chain";
+import { getChainClient, getBaseVaultReader, NetworkNotConfiguredError, ContractConfigError, SignerNotConfiguredError } from "../chain";
 import { buildEvidenceReport } from "../report";
-import { AuditRequestSchema, ARTICLES_BY_RISK, Network } from "../types";
+import { AuditRequestSchema, ARTICLES_BY_RISK, NETWORKS, Network } from "../types";
 import { randomUUID } from "crypto";
 
 const router = Router();
+
+/** ?network= for GET routes: default mantle; unknown values are rejected (400) */
+function parseNetwork(value: unknown): Network | null {
+  if (value === undefined) return "mantle";
+  const network = String(value);
+  return (NETWORKS as readonly string[]).includes(network) ? (network as Network) : null;
+}
+
+const NETWORK_ERROR = `network must be one of: ${NETWORKS.join(", ")}`;
+
+/** Configuration problems on the server side → 503 */
+function isConfigError(err: unknown): err is Error {
+  return (
+    err instanceof NetworkNotConfiguredError ||
+    err instanceof ContractConfigError ||
+    err instanceof SignerNotConfiguredError
+  );
+}
 
 // POST /v1/audit — log an agent decision on-chain
 router.post("/audit", validateBody(AuditRequestSchema), async (req: Request, res: Response) => {
@@ -25,7 +43,7 @@ router.post("/audit", validateBody(AuditRequestSchema), async (req: Request, res
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
-    if (err instanceof NetworkNotConfiguredError || err instanceof ContractConfigError) {
+    if (isConfigError(err)) {
       res.status(503).json({ error: err.message });
       return;
     }
@@ -37,10 +55,14 @@ router.post("/audit", validateBody(AuditRequestSchema), async (req: Request, res
 // GET /v1/audit/:agentId — get the full audit trail for an agent
 router.get("/audit/:agentId", async (req: Request, res: Response) => {
   const agentId = String(req.params.agentId);
-  const network = (req.query.network as Network) || "mantle";
+  const network = parseNetwork(req.query.network);
 
   if (!/^\d+$/.test(agentId)) {
     res.status(400).json({ error: "agentId must be a numeric string" });
+    return;
+  }
+  if (!network) {
+    res.status(400).json({ error: NETWORK_ERROR });
     return;
   }
 
@@ -55,7 +77,7 @@ router.get("/audit/:agentId", async (req: Request, res: Response) => {
       logs,
     });
   } catch (err: any) {
-    if (err instanceof NetworkNotConfiguredError || err instanceof ContractConfigError) {
+    if (isConfigError(err)) {
       res.status(503).json({ error: err.message });
       return;
     }
@@ -68,11 +90,15 @@ router.get("/audit/:agentId", async (req: Request, res: Response) => {
 // was checked per Article. It does not determine compliance.
 router.get("/audit/:agentId/report", async (req: Request, res: Response) => {
   const agentId = String(req.params.agentId);
-  const network = (req.query.network as Network) || "mantle";
+  const network = parseNetwork(req.query.network);
   const agentAddress = req.query.agent_address === undefined ? undefined : String(req.query.agent_address);
 
   if (!/^\d+$/.test(agentId)) {
     res.status(400).json({ error: "agentId must be a numeric string" });
+    return;
+  }
+  if (!network) {
+    res.status(400).json({ error: NETWORK_ERROR });
     return;
   }
   if (agentAddress !== undefined && !isAddress(agentAddress)) {
@@ -99,7 +125,7 @@ router.get("/audit/:agentId/report", async (req: Request, res: Response) => {
       vaultAddress: vaultReader.vaultAddress,
     }));
   } catch (err: any) {
-    if (err instanceof NetworkNotConfiguredError || err instanceof ContractConfigError) {
+    if (isConfigError(err)) {
       res.status(503).json({ error: err.message });
       return;
     }

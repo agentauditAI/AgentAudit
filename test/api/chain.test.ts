@@ -16,6 +16,7 @@ const {
   getBaseVaultAddress,
   NetworkNotConfiguredError,
   ContractConfigError,
+  SignerNotConfiguredError,
 } = require("../../src/api/chain");
 
 const API_KEY = "test-api-key";
@@ -132,6 +133,44 @@ describe("chain config: malformed addresses are explicit config errors", () => {
   it("networks without a registration address still raise NetworkNotConfiguredError", () => {
     expect(() => getChainClient("polygon")).toThrow(NetworkNotConfiguredError);
   });
+});
+
+describe("chain config: reads need no PRIVATE_KEY", () => {
+  const TEST_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+  const VALID_BATCH = "0x3333333333333333333333333333333333333333";
+
+  beforeEach(() => {
+    delete process.env.PRIVATE_KEY;
+  });
+  afterEach(() => {
+    process.env.PRIVATE_KEY = TEST_KEY;
+  });
+
+  it("getChainClient builds a read client without PRIVATE_KEY", () => {
+    process.env.AUDIT_BATCH_MANTLE = VALID_BATCH;
+    const client = getChainClient("mantle");
+    expect(client.registrationAddress).toBe("0x68769980879414e8f264Ac15a87813E2ABaBaD6e");
+    expect(client.auditBatchAddress).toBe(VALID_BATCH);
+  });
+
+  it("logAction without PRIVATE_KEY rejects with SignerNotConfiguredError before any RPC call", async () => {
+    process.env.AUDIT_BATCH_MANTLE = VALID_BATCH;
+    const client = getChainClient("mantle");
+    await expect(client.logAction(1, "x", "{}")).rejects.toBeInstanceOf(SignerNotConfiguredError);
+  });
+
+  it("logAction still reports the missing AgentAuditBatch first", async () => {
+    const client = getChainClient("mantle");
+    await expect(client.logAction(1, "x", "{}")).rejects.toBeInstanceOf(NetworkNotConfiguredError);
+  });
+
+  it("POST /v1/audit without PRIVATE_KEY returns 503 naming PRIVATE_KEY", async () => {
+    process.env.AUDIT_BATCH_MANTLE = VALID_BATCH;
+    const res = await send(app.post("/v1/audit").set(auth).send(validBody));
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/set PRIVATE_KEY on the server/);
+  });
+
 });
 
 describe("chain config: Base AuditVault v2 address", () => {
