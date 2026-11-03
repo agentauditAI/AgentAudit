@@ -150,7 +150,8 @@ Extends `BaseCallbackHandler` — the idiomatic LangChain approach. Attach to an
 
 - Entry point: `src/api/server.ts` — imports `app.ts` and calls `listen(3000)`
 - App factory: `src/api/app.ts` — exported separately so tests can import without binding a port
-- Chain connector: `src/api/chain.ts` — wraps ethers v6, one client per network; addresses come from env vars (`AUDIT_BATCH_<NETWORK>`, `REGISTRATION_<NETWORK>`); Mantle mainnet has default fallback addresses
+- Chain connector: `src/api/chain.ts` — wraps ethers v6, one client per network; addresses come from env vars (`AUDIT_BATCH_<NETWORK>`, `REGISTRATION_<NETWORK>`, `AUDIT_VAULT_BASE`), validated with `ethers.isAddress` (malformed → `ContractConfigError`, 503). Only defaults: Mantle AgentRegistration and Base AuditVault v2 (from `deployments/auditvault-base.json`). AgentAuditBatch has **no** default (none recorded in `deployments/`): logging/trail return 503 until `AUDIT_BATCH_<NETWORK>` is set
+- Report: `GET /v1/audit/:agentId/report` returns evidence report v2 (`src/api/report.ts`): per Article `evidence_found` / `no_evidence` / `not_checked` plus a disclaimer; never `met` / compliant / `compliance_status` (asserted in tests). Optional `?agent_address=` checks AuditVault v2 on Base (address is caller-supplied, not linked to the agent id). Registered = `id > 0 && createdAt > 0` (`isActive(0)` is true on-chain). Known issue: reads still need `PRIVATE_KEY`
 - Auth: `Authorization: Bearer <token>`, key stored in `API_KEY` env var; health endpoint is exempt
 - Validation: Zod schemas in `types.ts` — use `validateBody()` middleware; `agent_id` must be a numeric string (on-chain uint256)
 - **Zod v4 quirk**: `z.record()` requires two args — always write `z.record(z.string(), z.unknown())`
