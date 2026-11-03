@@ -42,7 +42,18 @@ afterAll(() => {
   }
 });
 
-const app = createApp();
+const { expectNoComplianceClaims } = require("./helpers/noComplianceClaims");
+const createdApp = createApp();
+// Every HTTP response in this file is also checked for compliance-verdict wording.
+const app = {
+  get: (path: string) => request(createdApp).get(path),
+  post: (path: string) => request(createdApp).post(path),
+};
+async function send(r: any) {
+  const res = await r;
+  expectNoComplianceClaims(res.body);
+  return res;
+}
 const validBody = {
   agent_id: "1",
   action: "transfer",
@@ -70,14 +81,14 @@ describe("chain config: AgentAuditBatch has no default address", () => {
   });
 
   it("POST /v1/audit on mantle returns 503 with a clear config message", async () => {
-    const res = await request(app).post("/v1/audit").set(auth).send(validBody);
+    const res = await send(app.post("/v1/audit").set(auth).send(validBody));
     expect(res.status).toBe(503);
     expect(res.body.error).toMatch(/AgentAuditBatch address not configured for network: mantle/);
     expect(res.body.error).toMatch(/Set AUDIT_BATCH_MANTLE/);
   });
 
   it("GET /v1/audit/:agentId on mantle returns 503 with a clear config message", async () => {
-    const res = await request(app).get("/v1/audit/1").set(auth);
+    const res = await send(app.get("/v1/audit/1").set(auth));
     expect(res.status).toBe(503);
     expect(res.body.error).toMatch(/AUDIT_BATCH_MANTLE/);
   });
@@ -97,7 +108,7 @@ describe("chain config: malformed addresses are explicit config errors", () => {
 
   it("POST /v1/audit returns 503 when AUDIT_BATCH_MANTLE is malformed", async () => {
     process.env.AUDIT_BATCH_MANTLE = MALFORMED;
-    const res = await request(app).post("/v1/audit").set(auth).send(validBody);
+    const res = await send(app.post("/v1/audit").set(auth).send(validBody));
     expect(res.status).toBe(503);
     expect(res.body.error).toBe(
       `Invalid contract address in AUDIT_BATCH_MANTLE: "${MALFORMED}" is not a valid EVM address.`,
@@ -106,14 +117,14 @@ describe("chain config: malformed addresses are explicit config errors", () => {
 
   it("GET /v1/audit/:agentId/report returns 503 when AUDIT_BATCH_MANTLE is malformed", async () => {
     process.env.AUDIT_BATCH_MANTLE = MALFORMED;
-    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    const res = await send(app.get("/v1/audit/1/report").set(auth));
     expect(res.status).toBe(503);
     expect(res.body.error).toMatch(/AUDIT_BATCH_MANTLE/);
   });
 
   it("GET /v1/audit/:agentId/report returns 503 when AUDIT_VAULT_BASE is malformed", async () => {
     process.env.AUDIT_VAULT_BASE = "not-an-address";
-    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    const res = await send(app.get("/v1/audit/1/report").set(auth));
     expect(res.status).toBe(503);
     expect(res.body.error).toMatch(/AUDIT_VAULT_BASE/);
   });

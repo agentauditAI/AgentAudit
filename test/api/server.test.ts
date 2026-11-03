@@ -1,5 +1,6 @@
 import request from "supertest";
 import { createApp } from "../../src/api/app";
+import { expectNoComplianceClaims as expectNoClaimsStrict } from "./helpers/noComplianceClaims";
 
 // Mock the chain module so tests never touch a real network
 jest.mock("../../src/api/chain", () => {
@@ -498,6 +499,84 @@ describe("GET /v1/audit/:agentId/report", () => {
     const res = await request(app).get("/v1/audit/1/report").set(auth);
     expect(res.status).toBe(502);
     expect(res.body.error).toMatch(/report/i);
+  });
+});
+
+// ─── Every API response: no compliance verdict ──────────────────────────────
+
+describe("every API response contains no met / COMPLIANT / compliant / compliance_status", () => {
+  const body = {
+    agent_id: "1",
+    action: "transfer",
+    decision: "approved",
+    risk_level: "HIGH",
+    network: "mantle",
+    metadata: { amount: "100" },
+  };
+  const notConfigured = () =>
+    getChainClient.mockImplementationOnce((network: string) => {
+      throw new NetworkNotConfiguredError(network);
+    });
+  const malformed = () =>
+    getChainClient.mockImplementationOnce(() => {
+      throw new ContractConfigError("AUDIT_BATCH_MANTLE", "0xAF9ccA0C3D79900576557329F57824A0e277");
+    });
+  const unregistered = () =>
+    mockClient.getAgentInfo.mockResolvedValueOnce({
+      registered: false, name: "", operator: "0x0000000000000000000000000000000000000000",
+      createdAt: 0, complianceLevel: "", spendLimit: "0", revoked: false,
+    });
+
+  const cases: Array<[string, number, () => any, (() => void)?]> = [
+    ["GET /v1/health", 200, () => request(app).get("/v1/health")],
+    ["POST /v1/audit HIGH", 201, () => request(app).post("/v1/audit").set(auth).send(body)],
+    ["POST /v1/audit MEDIUM", 201, () => request(app).post("/v1/audit").set(auth).send({ ...body, risk_level: "MEDIUM" })],
+    ["POST /v1/audit LOW", 201, () => request(app).post("/v1/audit").set(auth).send({ ...body, risk_level: "LOW" })],
+    ["POST /v1/audit no auth", 401, () => request(app).post("/v1/audit").send(body)],
+    ["POST /v1/audit wrong key", 401, () => request(app).post("/v1/audit").set("Authorization", "Bearer nope").send(body)],
+    ["POST /v1/audit invalid body", 400, () => request(app).post("/v1/audit").set(auth).send({ ...body, risk_level: "CRITICAL" })],
+    ["POST /v1/audit not configured", 503, () => request(app).post("/v1/audit").set(auth).send(body), notConfigured],
+    ["POST /v1/audit malformed address", 503, () => request(app).post("/v1/audit").set(auth).send(body), malformed],
+    ["POST /v1/audit chain failure", 502, () => request(app).post("/v1/audit").set(auth).send(body),
+      () => mockClient.logAction.mockRejectedValueOnce(new Error("RPC error"))],
+    ["GET /v1/audit/1", 200, () => request(app).get("/v1/audit/1").set(auth)],
+    ["GET /v1/audit/abc", 400, () => request(app).get("/v1/audit/abc").set(auth)],
+    ["GET /v1/audit/1 no auth", 401, () => request(app).get("/v1/audit/1")],
+    ["GET /v1/audit/1 not configured", 503, () => request(app).get("/v1/audit/1").set(auth), notConfigured],
+    ["GET /v1/audit/1 malformed address", 503, () => request(app).get("/v1/audit/1").set(auth), malformed],
+    ["GET /v1/audit/1 chain failure", 502, () => request(app).get("/v1/audit/1").set(auth),
+      () => mockClient.getAuditTrail.mockRejectedValueOnce(new Error("RPC error"))],
+    ["GET report registered", 200, () => request(app).get("/v1/audit/1/report").set(auth)],
+    ["GET report with agent_address", 200,
+      () => request(app).get("/v1/audit/1/report?agent_address=0x1111111111111111111111111111111111111111").set(auth)],
+    ["GET report agent #0", 200, () => request(app).get("/v1/audit/0/report").set(auth), unregistered],
+    ["GET report non-existent id", 200, () => request(app).get("/v1/audit/999999/report").set(auth), unregistered],
+    ["GET report revoked", 200, () => request(app).get("/v1/audit/1/report").set(auth),
+      () => mockClient.getAgentInfo.mockResolvedValueOnce({ ...registeredAgent, revoked: true })],
+    ["GET report AgentAuditBatch not configured", 200, () => request(app).get("/v1/audit/1/report").set(auth),
+      () => { mockClient.auditBatchAddress = null; }],
+    ["GET report no events", 200, () => request(app).get("/v1/audit/1/report").set(auth),
+      () => mockClient.getAuditTrail.mockResolvedValueOnce([])],
+    ["GET report bad agentId", 400, () => request(app).get("/v1/audit/abc/report").set(auth)],
+    ["GET report bad agent_address", 400, () => request(app).get("/v1/audit/1/report?agent_address=0x12").set(auth)],
+    ["GET report no auth", 401, () => request(app).get("/v1/audit/1/report")],
+    ["GET report not configured", 503, () => request(app).get("/v1/audit/1/report").set(auth), notConfigured],
+    ["GET report malformed address", 503, () => request(app).get("/v1/audit/1/report").set(auth), malformed],
+    ["GET report chain failure", 502, () => request(app).get("/v1/audit/1/report").set(auth),
+      () => mockClient.getAgentInfo.mockRejectedValueOnce(new Error("RPC error"))],
+    ["404", 404, () => request(app).get("/v1/unknown").set(auth)],
+  ];
+
+  afterEach(() => {
+    mockClient.auditBatchAddress = "0x00000000000000000000000000000000000000Ab";
+  });
+
+  it.each(cases.map(([name, status, send, setup]) => ({ name, status, send, setup })))(
+    "$name ($status)", async ({ status, send, setup }) => {
+    setup?.();
+    const res = await send();
+    expect(res.status).toBe(status);
+    expectNoClaimsStrict(res.body);
   });
 });
 
