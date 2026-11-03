@@ -1,6 +1,8 @@
 import { Router, Request, Response } from "express";
 import { validateBody } from "../middleware/validate";
-import { getChainClient, NetworkNotConfiguredError } from "../chain";
+import { isAddress } from "ethers";
+import { getChainClient, getBaseVaultReader, NetworkNotConfiguredError, ContractConfigError } from "../chain";
+import { buildEvidenceReport } from "../report";
 import { AuditRequestSchema, ARTICLES_BY_RISK, Network } from "../types";
 import { randomUUID } from "crypto";
 
@@ -23,7 +25,7 @@ router.post("/audit", validateBody(AuditRequestSchema), async (req: Request, res
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
-    if (err instanceof NetworkNotConfiguredError) {
+    if (err instanceof NetworkNotConfiguredError || err instanceof ContractConfigError) {
       res.status(503).json({ error: err.message });
       return;
     }
@@ -53,7 +55,7 @@ router.get("/audit/:agentId", async (req: Request, res: Response) => {
       logs,
     });
   } catch (err: any) {
-    if (err instanceof NetworkNotConfiguredError) {
+    if (err instanceof NetworkNotConfiguredError || err instanceof ContractConfigError) {
       res.status(503).json({ error: err.message });
       return;
     }
@@ -62,60 +64,42 @@ router.get("/audit/:agentId", async (req: Request, res: Response) => {
   }
 });
 
-// GET /v1/audit/:agentId/report — generate EU AI Act compliance report
+// GET /v1/audit/:agentId/report — evidence report (v2): lists the on-chain evidence that
+// was checked per Article. It does not determine compliance.
 router.get("/audit/:agentId/report", async (req: Request, res: Response) => {
   const agentId = String(req.params.agentId);
   const network = (req.query.network as Network) || "mantle";
+  const agentAddress = req.query.agent_address === undefined ? undefined : String(req.query.agent_address);
 
   if (!/^\d+$/.test(agentId)) {
     res.status(400).json({ error: "agentId must be a numeric string" });
     return;
   }
+  if (agentAddress !== undefined && !isAddress(agentAddress)) {
+    res.status(400).json({ error: "agent_address must be a valid EVM address" });
+    return;
+  }
 
   try {
     const client = getChainClient(network);
-    const [agentInfo, logs] = await Promise.all([
+    const vaultReader = getBaseVaultReader();
+    const [agent, logs, vault] = await Promise.all([
       client.getAgentInfo(Number(agentId)),
-      client.getAuditTrail(Number(agentId)),
+      client.auditBatchAddress ? client.getAuditTrail(Number(agentId)) : Promise.resolve(null),
+      agentAddress ? vaultReader.getBatchSummary(agentAddress) : Promise.resolve(null),
     ]);
 
-    const riskLevel = agentInfo.complianceLevel === "high"
-      ? "HIGH"
-      : agentInfo.complianceLevel === "limited"
-      ? "MEDIUM"
-      : "LOW";
-
-    const report = {
-      generated_at: new Date().toISOString(),
-      agent_id: agentId,
+    res.json(buildEvidenceReport({
+      agentId,
       network,
-      agent: {
-        name: agentInfo.name,
-        operator: agentInfo.operator,
-        registered_at: new Date(agentInfo.createdAt * 1000).toISOString(),
-        compliance_level: agentInfo.complianceLevel,
-        active: agentInfo.active,
-      },
-      audit_summary: {
-        total_actions_logged: agentInfo.logCount,
-        actions_in_trail: logs.length,
-        first_action: logs.length > 0
-          ? new Date(logs[0].timestamp * 1000).toISOString()
-          : null,
-        last_action: logs.length > 0
-          ? new Date(logs[logs.length - 1].timestamp * 1000).toISOString()
-          : null,
-      },
-      eu_ai_act_compliance: {
-        applicable_articles: ARTICLES_BY_RISK[riskLevel as keyof typeof ARTICLES_BY_RISK],
-        compliance_status: agentInfo.active ? "COMPLIANT" : "NON_COMPLIANT",
-        obligations: buildObligations(riskLevel as "HIGH" | "MEDIUM" | "LOW"),
-      },
-    };
-
-    res.json(report);
+      registrationAddress: client.registrationAddress,
+      agent,
+      auditBatch: logs && client.auditBatchAddress ? { address: client.auditBatchAddress, logs } : null,
+      vault,
+      vaultAddress: vaultReader.vaultAddress,
+    }));
   } catch (err: any) {
-    if (err instanceof NetworkNotConfiguredError) {
+    if (err instanceof NetworkNotConfiguredError || err instanceof ContractConfigError) {
       res.status(503).json({ error: err.message });
       return;
     }
@@ -123,26 +107,5 @@ router.get("/audit/:agentId/report", async (req: Request, res: Response) => {
     res.status(502).json({ error: "Failed to generate report", detail: err.message });
   }
 });
-
-function buildObligations(riskLevel: "HIGH" | "MEDIUM" | "LOW") {
-  const base = [
-    { article: "Art. 12", obligation: "Record-keeping — immutable audit log maintained on-chain", met: true },
-    { article: "Art. 19", obligation: "Logging requirements — per-action logging active", met: true },
-  ];
-  if (riskLevel === "LOW") return base;
-
-  const medium = [
-    ...base,
-    { article: "Art. 13", obligation: "Transparency — public log queryability enabled", met: true },
-  ];
-  if (riskLevel === "MEDIUM") return medium;
-
-  return [
-    ...medium,
-    { article: "Art. 9",  obligation: "Risk management — on-chain audit trail as risk evidence", met: true },
-    { article: "Art. 26", obligation: "Deployer obligations — KYA registration recorded", met: true },
-    { article: "Art. 72", obligation: "Post-market monitoring — continuous activity log active", met: true },
-  ];
-}
 
 export default router;

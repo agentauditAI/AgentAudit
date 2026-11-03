@@ -3,7 +3,18 @@ import { createApp } from "../../src/api/app";
 
 // Mock the chain module so tests never touch a real network
 jest.mock("../../src/api/chain", () => {
+  const registeredAgent = {
+    registered: true,
+    name: "TestAgent",
+    operator: "0x1234",
+    createdAt: 1700000000,
+    complianceLevel: "high",
+    spendLimit: "0",
+    revoked: false,
+  };
   const mockClient = {
+    registrationAddress: "0x68769980879414e8f264Ac15a87813E2ABaBaD6e",
+    auditBatchAddress: "0x00000000000000000000000000000000000000Ab" as string | null,
     logAction: jest.fn().mockResolvedValue("0xdeadbeefcafe"),
     getAuditTrail: jest.fn().mockResolvedValue([
       {
@@ -12,31 +23,53 @@ jest.mock("../../src/api/chain", () => {
         payloadHash: "0xabc",
         timestamp: 1700000000,
         txHash: "0xdeadbeef",
+        blockNumber: 123,
       },
     ]),
-    getAgentInfo: jest.fn().mockResolvedValue({
-      name: "TestAgent",
-      operator: "0x1234",
-      createdAt: 1700000000,
-      complianceLevel: "high",
-      active: true,
-      logCount: 1,
-    }),
+    getAgentInfo: jest.fn().mockResolvedValue(registeredAgent),
   };
+  const mockVault = {
+    vaultAddress: "0xCeE831070aa9081422f30df5559c125aa47A75DB",
+    getBatchSummary: jest.fn().mockImplementation(async (agentAddress: string) => ({
+      vaultAddress: "0xCeE831070aa9081422f30df5559c125aa47A75DB",
+      agentAddress,
+      batchCount: 3,
+      lastBatch: { batchIndex: 2, blockNumber: 47100000, timestamp: 1780000000 },
+    })),
+  };
+
+  class NetworkNotConfiguredError extends Error {
+    constructor(network: string) {
+      super(`Contract addresses not configured for network: ${network}`);
+      this.name = "NetworkNotConfiguredError";
+    }
+  }
+  class ContractConfigError extends Error {
+    constructor(envVar: string, value: string) {
+      super(`Invalid contract address in ${envVar}: "${value}" is not a valid EVM address.`);
+      this.name = "ContractConfigError";
+    }
+  }
 
   return {
     getChainClient: jest.fn().mockReturnValue(mockClient),
-    NetworkNotConfiguredError: class NetworkNotConfiguredError extends Error {
-      constructor(network: string) {
-        super(`Contract addresses not configured for network: ${network}`);
-        this.name = "NetworkNotConfiguredError";
-      }
-    },
+    getBaseVaultReader: jest.fn().mockReturnValue(mockVault),
+    NetworkNotConfiguredError,
+    ContractConfigError,
     _mockClient: mockClient,
+    _mockVault: mockVault,
+    _registeredAgent: registeredAgent,
   };
 });
 
-const { getChainClient, _mockClient: mockClient, NetworkNotConfiguredError } = require("../../src/api/chain");
+const {
+  getChainClient,
+  _mockClient: mockClient,
+  _mockVault: mockVault,
+  _registeredAgent: registeredAgent,
+  NetworkNotConfiguredError,
+  ContractConfigError,
+} = require("../../src/api/chain");
 
 const API_KEY = "test-api-key";
 
@@ -212,34 +245,235 @@ describe("GET /v1/audit/:agentId", () => {
 
 // ─── GET /v1/audit/:agentId/report ───────────────────────────────────────────
 
+const AGENT_ADDR = "0x1111111111111111111111111111111111111111";
+const UNREGISTERED = {
+  registered: false,
+  name: "",
+  operator: "0x0000000000000000000000000000000000000000",
+  createdAt: 0,
+  complianceLevel: "",
+  spendLimit: "0",
+  revoked: false,
+};
+
+const article = (body: any, art: string) => body.evidence.find((e: any) => e.article === art);
+
+/** Every key in a JSON value, recursively */
+function allKeys(v: unknown): string[] {
+  if (Array.isArray(v)) return v.flatMap(allKeys);
+  if (v && typeof v === "object") {
+    return Object.entries(v).flatMap(([k, x]) => [k, ...allKeys(x)]);
+  }
+  return [];
+}
+
+function expectNoComplianceClaims(body: unknown) {
+  const json = JSON.stringify(body);
+  expect(json).not.toMatch(/compliant/i); // also catches COMPLIANT / NON_COMPLIANT
+  expect(json).not.toContain("compliance_status");
+  expect(json).not.toMatch(/\bmet\b/i);
+  expect(allKeys(body)).not.toContain("met");
+}
+
 describe("GET /v1/audit/:agentId/report", () => {
-  it("returns a compliance report with correct shape", async () => {
-    const res = await request(app).get("/v1/audit/1/report").set(auth);
-    expect(res.status).toBe(200);
-    expect(res.body.agent_id).toBe("1");
-    expect(res.body.agent.name).toBe("TestAgent");
-    expect(res.body.agent.compliance_level).toBe("high");
-    expect(res.body.eu_ai_act_compliance.applicable_articles).toContain("Art. 72");
-    expect(res.body.eu_ai_act_compliance.compliance_status).toBe("COMPLIANT");
-    expect(res.body.audit_summary.total_actions_logged).toBe(1);
+  afterEach(() => {
+    mockClient.auditBatchAddress = "0x00000000000000000000000000000000000000Ab";
   });
 
-  it("marks revoked agent as NON_COMPLIANT", async () => {
-    mockClient.getAgentInfo.mockResolvedValueOnce({
-      name: "RevokedAgent",
-      operator: "0x1234",
-      createdAt: 1700000000,
-      complianceLevel: "high",
-      active: false,
-      logCount: 5,
-    });
+  it("returns a v2 evidence report with disclaimer and all six Articles", async () => {
     const res = await request(app).get("/v1/audit/1/report").set(auth);
-    expect(res.body.eu_ai_act_compliance.compliance_status).toBe("NON_COMPLIANT");
+    expect(res.status).toBe(200);
+    expect(res.body.report_version).toBe(2);
+    expect(res.body.agent_id).toBe("1");
+    expect(res.body.network).toBe("mantle");
+    expect(res.body.disclaimer).toMatch(/does not determine/);
+    expect(res.body.evidence.map((e: any) => e.article)).toEqual(
+      ["Art. 12", "Art. 19", "Art. 26", "Art. 13", "Art. 9", "Art. 72"],
+    );
+    expect(res.body.eu_ai_act_compliance).toBeUndefined();
+  });
+
+  it("reports the registered agent with its self-declared tier", async () => {
+    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    expect(res.body.agent).toEqual({
+      registered: true,
+      name: "TestAgent",
+      operator: "0x1234",
+      registered_at: new Date(1700000000 * 1000).toISOString(),
+      declared_risk_tier: "high",
+      revoked: false,
+    });
+  });
+
+  it("marks Art. 26 evidence_found for a registered agent", async () => {
+    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    const a26 = article(res.body, "Art. 26");
+    expect(a26.status).toBe("evidence_found");
+    expect(a26.checks[0].source).toBe("AgentRegistration");
+    expect(a26.checks[0].detail).toMatch(/agent #1 registered on mantle/);
+    expect(a26.checks[0].detail).toMatch(/not revoked/);
+  });
+
+  it("keeps Art. 26 evidence_found for a revoked agent, with revoked:true and a note", async () => {
+    mockClient.getAgentInfo.mockResolvedValueOnce({ ...registeredAgent, revoked: true });
+    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    expect(res.body.agent.revoked).toBe(true);
+    const a26 = article(res.body, "Art. 26");
+    expect(a26.status).toBe("evidence_found");
+    expect(a26.checks[0].detail).toMatch(/revoked by the operator/);
+    expectNoComplianceClaims(res.body);
+  });
+
+  it("agent #0: registered:false and Art. 26 no_evidence", async () => {
+    mockClient.getAgentInfo.mockResolvedValueOnce(UNREGISTERED);
+    const res = await request(app).get("/v1/audit/0/report").set(auth);
+    expect(res.status).toBe(200);
+    expect(mockClient.getAgentInfo).toHaveBeenCalledWith(0);
+    expect(res.body.agent.registered).toBe(false);
+    expect(res.body.agent.name).toBeNull();
+    const a26 = article(res.body, "Art. 26");
+    expect(a26.status).toBe("no_evidence");
+    expect(a26.checks.every((c: any) => c.status !== "evidence_found")).toBe(true);
+  });
+
+  it("non-existent agent id: registered:false and Art. 26 no_evidence", async () => {
+    mockClient.getAgentInfo.mockResolvedValueOnce(UNREGISTERED);
+    const res = await request(app).get("/v1/audit/999999/report").set(auth);
+    expect(res.body.agent.registered).toBe(false);
+    const a26 = article(res.body, "Art. 26");
+    expect(a26.status).toBe("no_evidence");
+    expect(a26.status).not.toBe("evidence_found");
+    expect(a26.checks[0].detail).toMatch(/no AgentRegistration record for agent #999999/);
+  });
+
+  it("Art. 12/19: AgentAuditBatch events give evidence_found with last block", async () => {
+    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    for (const art of ["Art. 12", "Art. 19"]) {
+      const a = article(res.body, art);
+      expect(a.status).toBe("evidence_found");
+      const batch = a.checks.find((c: any) => c.source === "AgentAuditBatch");
+      expect(batch.status).toBe("evidence_found");
+      expect(batch.detail).toMatch(/1 AuditLogged events for agent #1 on mantle/);
+      expect(batch.detail).toMatch(/submitter is not verified/);
+      expect(batch.data.last_block).toBe(123);
+    }
+  });
+
+  it("Art. 12/19: no_evidence when AgentAuditBatch has no events and no agent_address", async () => {
+    mockClient.getAuditTrail.mockResolvedValueOnce([]);
+    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    const a12 = article(res.body, "Art. 12");
+    expect(a12.status).toBe("no_evidence");
+    expect(a12.checks.find((c: any) => c.source === "AgentAuditBatch").status).toBe("no_evidence");
+  });
+
+  it("Art. 12/19: not_checked when AgentAuditBatch is not configured and no agent_address", async () => {
+    mockClient.auditBatchAddress = null;
+    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    expect(res.status).toBe(200);
+    expect(mockClient.getAuditTrail).not.toHaveBeenCalled();
+    const a12 = article(res.body, "Art. 12");
+    expect(a12.status).toBe("not_checked");
+    const batch = a12.checks.find((c: any) => c.source === "AgentAuditBatch");
+    expect(batch.status).toBe("not_checked");
+    expect(batch.detail).toMatch(/AUDIT_BATCH_MANTLE not configured/);
+  });
+
+  it("AuditVault v2 check is not_checked without agent_address", async () => {
+    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    expect(mockVault.getBatchSummary).not.toHaveBeenCalled();
+    const vault = article(res.body, "Art. 12").checks.find((c: any) => c.source === "AuditVault v2");
+    expect(vault.status).toBe("not_checked");
+    expect(vault.network).toBe("base");
+    expect(vault.address).toBe("0xCeE831070aa9081422f30df5559c125aa47A75DB");
+  });
+
+  it("AuditVault v2 check with agent_address uses the caller-supplied wording", async () => {
+    mockClient.auditBatchAddress = null;
+    const res = await request(app).get(`/v1/audit/1/report?agent_address=${AGENT_ADDR}`).set(auth);
+    expect(res.status).toBe(200);
+    expect(mockVault.getBatchSummary).toHaveBeenCalledWith(AGENT_ADDR);
+    const a12 = article(res.body, "Art. 12");
+    expect(a12.status).toBe("evidence_found");
+    const vault = a12.checks.find((c: any) => c.source === "AuditVault v2");
+    expect(vault.status).toBe("evidence_found");
+    expect(vault.detail).toBe(
+      `3 batches recorded under the caller-supplied address ${AGENT_ADDR}; ` +
+      "this address is not linked to agent #1 on-chain and the submitter is not verified (AuditVault v2)",
+    );
+    expect(vault.data).toEqual({
+      batch_count: 3,
+      last_batch_index: 2,
+      last_block: 47100000,
+      last_at: new Date(1780000000 * 1000).toISOString(),
+    });
+  });
+
+  it("AuditVault v2 with zero batches is no_evidence", async () => {
+    mockClient.auditBatchAddress = null;
+    mockVault.getBatchSummary.mockResolvedValueOnce({
+      vaultAddress: "0xCeE831070aa9081422f30df5559c125aa47A75DB",
+      agentAddress: AGENT_ADDR,
+      batchCount: 0,
+      lastBatch: null,
+    });
+    const res = await request(app).get(`/v1/audit/1/report?agent_address=${AGENT_ADDR}`).set(auth);
+    const a19 = article(res.body, "Art. 19");
+    expect(a19.status).toBe("no_evidence");
+    const vault = a19.checks.find((c: any) => c.source === "AuditVault v2");
+    expect(vault.detail).toMatch(/^0 batches recorded under the caller-supplied address/);
+    expect(vault.data.last_block).toBeNull();
+  });
+
+  it("returns 400 for an invalid agent_address", async () => {
+    const res = await request(app).get("/v1/audit/1/report?agent_address=0x1234").set(auth);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/agent_address/);
+    expect(mockVault.getBatchSummary).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for an empty agent_address", async () => {
+    const res = await request(app).get("/v1/audit/1/report?agent_address=").set(auth);
+    expect(res.status).toBe(400);
+  });
+
+  it("Art. 9, 13 and 72 are always not_checked; Art. 72 notes PostMarketMonitor is not deployed", async () => {
+    const res = await request(app).get(`/v1/audit/1/report?agent_address=${AGENT_ADDR}`).set(auth);
+    for (const art of ["Art. 9", "Art. 13", "Art. 72"]) {
+      expect(article(res.body, art).status).toBe("not_checked");
+      expect(article(res.body, art).checks).toEqual([]);
+    }
+    expect(article(res.body, "Art. 72").detail).toMatch(/PostMarketMonitor is not deployed/);
+  });
+
+  it("never contains met / COMPLIANT / compliant / compliance_status", async () => {
+    const variants = [
+      () => request(app).get("/v1/audit/1/report").set(auth),
+      () => request(app).get(`/v1/audit/1/report?agent_address=${AGENT_ADDR}`).set(auth),
+      () => {
+        mockClient.getAgentInfo.mockResolvedValueOnce(UNREGISTERED);
+        return request(app).get("/v1/audit/0/report").set(auth);
+      },
+      () => {
+        mockClient.getAgentInfo.mockResolvedValueOnce({ ...registeredAgent, revoked: true, complianceLevel: "minimal" });
+        return request(app).get("/v1/audit/1/report").set(auth);
+      },
+    ];
+    for (const v of variants) {
+      const res = await v();
+      expect(res.status).toBe(200);
+      expectNoComplianceClaims(res.body);
+    }
   });
 
   it("returns 400 for non-numeric agentId", async () => {
     const res = await request(app).get("/v1/audit/abc/report").set(auth);
     expect(res.status).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await request(app).get("/v1/audit/1/report");
+    expect(res.status).toBe(401);
   });
 
   it("returns 503 when network not configured", async () => {
@@ -248,6 +482,22 @@ describe("GET /v1/audit/:agentId/report", () => {
     });
     const res = await request(app).get("/v1/audit/1/report?network=optimism").set(auth);
     expect(res.status).toBe(503);
+  });
+
+  it("returns 503 on a malformed contract address", async () => {
+    getChainClient.mockImplementationOnce(() => {
+      throw new ContractConfigError("AUDIT_BATCH_MANTLE", "0xAF9ccA0C3D79900576557329F57824A0e277");
+    });
+    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/AUDIT_BATCH_MANTLE/);
+  });
+
+  it("returns 502 when a chain read fails", async () => {
+    mockClient.getAgentInfo.mockRejectedValueOnce(new Error("RPC error"));
+    const res = await request(app).get("/v1/audit/1/report").set(auth);
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/report/i);
   });
 });
 

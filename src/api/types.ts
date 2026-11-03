@@ -20,7 +20,8 @@ export const AuditRequestSchema = z.object({
 
 export type AuditRequest = z.infer<typeof AuditRequestSchema>;
 
-// EU AI Act articles triggered per risk level
+// EU AI Act articles mapped from the operator's self-declared risk tier;
+// not a legal classification or compliance result
 export const ARTICLES_BY_RISK: Record<RiskLevel, string[]> = {
   HIGH:   ["Art. 9", "Art. 12", "Art. 13", "Art. 19", "Art. 26", "Art. 72"],
   MEDIUM: ["Art. 12", "Art. 13", "Art. 19"],
