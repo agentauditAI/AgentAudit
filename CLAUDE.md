@@ -14,7 +14,7 @@ AgentAudit is on-chain evidence infrastructure for AI agents: it supports, and p
 | Smart contracts | Solidity 0.8.20 (Hardhat, v1/v2); forge pinned to 0.8.35 (`compilation_restrictions`, v2/src/script); `contracts/v3/` exactly 0.8.38, evm `prague` |
 | Testing | Foundry (`forge test`) |
 | Deployment | Hardhat (`npm run deploy:<network>`) |
-| Networks | Mantle Mainnet, Arbitrum One (+ testnets) |
+| Networks | Batch logging (AuditVault v2): Base only. IncidentRegistry v2: Base, Arbitrum, Optimism, Polygon, Mantle. AuditVault v1 + AgentRegistration: Mantle. Verified list: `docs/AUDIT_ARCHITECTURE.md` |
 | Off-chain storage | IPFS / Arweave (content URIs, Merkle roots on-chain) |
 
 ## Commands
@@ -85,7 +85,7 @@ out/                 ← Foundry build artifacts (do not edit or commit)
 - Private setup helpers prefixed with `_`: `function _enroll() internal { ... }`
 - Every public test named `test_<action>_<condition>` (e.g., `test_enroll_revertsIfAlreadyEnrolled`)
 - Use `vm.prank`, `vm.expectEmit`, `vm.expectRevert(abi.encodeWithSelector(...))` — never raw string reverts
-- Aim for 100% branch coverage; each contract's test suite is tracked in commit messages as `N/N tests passing`
+- Aim for 100% branch coverage; report each suite's `N/N tests passing` in the PR body (not in commit messages)
 - Do not write tests that only check happy-path; always cover access-control and edge cases
 
 ## EU AI Act Compliance Mapping
@@ -151,7 +151,8 @@ Extends `BaseCallbackHandler` — the idiomatic LangChain approach. Attach to an
 - Entry point: `src/api/server.ts` — imports `app.ts` and calls `listen(3000)`
 - App factory: `src/api/app.ts` — exported separately so tests can import without binding a port
 - Chain connector: `src/api/chain.ts` — wraps ethers v6, one client per network; addresses come from env vars (`AUDIT_BATCH_<NETWORK>`, `REGISTRATION_<NETWORK>`, `AUDIT_VAULT_BASE`), validated with `ethers.isAddress` (malformed → `ContractConfigError`, 503). Only defaults: Mantle AgentRegistration and Base AuditVault v2 (from `deployments/auditvault-base.json`). AgentAuditBatch has **no** default (none recorded in `deployments/`): logging/trail return 503 until `AUDIT_BATCH_<NETWORK>` is set
-- Report: `GET /v1/audit/:agentId/report` returns evidence report v2 (`src/api/report.ts`): per Article `evidence_found` / `no_evidence` / `not_checked` plus a disclaimer; never `met` / compliant / `compliance_status` (asserted in tests). Optional `?agent_address=` checks AuditVault v2 on Base (address is caller-supplied, not linked to the agent id). Registered = `id > 0 && createdAt > 0` (`isActive(0)` is true on-chain). Known issue: reads still need `PRIVATE_KEY`
+- Report: `GET /v1/audit/:agentId/report` returns evidence report v2 (`src/api/report.ts`): per Article `evidence_found` / `no_evidence` / `not_checked` plus a disclaimer; never `met` / compliant / `compliance_status` (asserted in tests). Optional `?agent_address=` checks AuditVault v2 on Base (address is caller-supplied, not linked to the agent id). Registered = `id > 0 && createdAt > 0` (`isActive(0)` is true on-chain)
+- Keys: read endpoints (`GET /v1/audit/:agentId`, `/report`) use the provider only and need no `PRIVATE_KEY`; the wallet is created on demand by `logAction` (`POST /v1/audit`), which returns 503 (`SignerNotConfiguredError`) without it. `?network=` on GET routes must be one of `NETWORKS` (400 otherwise). `test/api/readonly.test.ts` runs the real `chain.ts` against a local stub JSON-RPC with no key
 - Auth: `Authorization: Bearer <token>`, key stored in `API_KEY` env var; health endpoint is exempt
 - Validation: Zod schemas in `types.ts` — use `validateBody()` middleware; `agent_id` must be a numeric string (on-chain uint256)
 - **Zod v4 quirk**: `z.record()` requires two args — always write `z.record(z.string(), z.unknown())`
@@ -198,5 +199,6 @@ The plugin is a standalone CommonJS package — **do not modify it** without und
 ## Git
 
 - Branch from `main`; PR back to `main`
-- Commit message format: `feat: <ContractName>.sol — <Article reference>, N/N tests passing`
+- Commit messages: conventional style (`feat:`, `fix:`, `docs:`, `test:`, `chore:`, `build:`), logical commits. No EU AI Act article references and no test counts in commit messages; put test counts in the PR body
+- Commit with explicit paths (never `git commit -am`); restore `cache/solidity-files-cache.json` first
 - Git user for this repo: `agentauditAI`
