@@ -40,7 +40,7 @@ test/                ← Foundry test files (*.t.sol)
 test/api/            ← Jest + supertest API tests
 test/sdk/            ← Jest SDK wrapper tests
 src/api/             ← REST API gateway (Express + TypeScript)
-src/mcp-server.ts    ← MCP server (`npm run mcp`); `createServer(options)` + stdio entry. audit_action / get_audit_log / verify_proof use AuditVault v2 (Base; `AUDIT_VAULT_<NETWORK>` overrides), Phase 7 tools use deployments/phase7-*.json
+src/mcp-server.ts    ← MCP server (`npm run mcp`); `createServer(options)` + stdio entry. audit_action / get_audit_log / verify_proof use AuditVault v2 (Base; `AUDIT_VAULT_<NETWORK>` overrides), Phase 7 tools use deployments/phase7-*.json. `get_evidence_report` (`get_compliance_report` is a deprecated alias) and `check_conformity` list on-chain records plus a disclaimer, never a compliance verdict; ConformityAssessment records are self-declared. `report_incident` is an on-chain record and does not calculate legal deadlines
 test/mcp/            ← anvil tests for every MCP tool (same AGENTAUDIT_SKIP_ANVIL rule as the SDK anvil tests)
 sdk/src/index.ts     ← core AgentAudit SDK (ethers v6, on-chain logging)
 sdk/src/openai.ts    ← AuditedOpenAI wrapper
