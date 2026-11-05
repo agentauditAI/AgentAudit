@@ -142,3 +142,7 @@ vite.config.ts.timestamp-*
 
 # AgentAudit batch payloads written by FileBatchStore (hashes only, but local runtime data)
 agentaudit-batches/
+
+# Python
+__pycache__/
+*.pyc
