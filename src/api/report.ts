@@ -8,7 +8,8 @@ export const REPORT_VERSION = 2;
 
 export const REPORT_DISCLAIMER =
   "This report lists on-chain evidence found by the checks below. " +
-  "It does not determine whether any obligation under the EU AI Act or any other law is satisfied.";
+  "It does not determine whether any obligation under the EU AI Act or any other law is satisfied. " +
+  "Not legal advice.";
 
 export type EvidenceStatus = "evidence_found" | "no_evidence" | "not_checked";
 

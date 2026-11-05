@@ -123,7 +123,7 @@ const result = await audit.log({
 console.log(`Logged on-chain: ${result.explorerUrl}`);
 ```
 
-### 4. Compliance report — review status and record score (Art. 72)
+### 4. Review status and record a score
 
 ```ts
 import AgentAudit from "@agentauditai/sdk";
@@ -141,7 +141,7 @@ const { due, overdueBySeconds } = await audit.isReviewDue(agentAddress);
 console.log(`Total on-chain logs: ${logCount}`);
 console.log(`Review due: ${due}${due ? ` (${Math.floor(overdueBySeconds / 86400)} days overdue)` : ""}`);
 
-// Record periodic compliance review (score is 0–10000, e.g. 9500 = 95.00%)
+// Record a periodic review (self-reported score, 0–10000, e.g. 9500 = 95.00%)
 const { txHash } = await audit.recordReview({
   agentAddress,
   complianceScore: 9500,
@@ -198,14 +198,14 @@ and `isWithinDeadline(incidentId)`.
 
 ## EU AI Act Coverage
 
-| Article | Obligation | SDK method |
+| Article | Related obligation | SDK method |
 |---------|-----------|------------|
 | Art. 9 | Risk management system | `log()` with `riskLevel` |
 | Art. 11 | Technical documentation | `registerAgent()` |
 | Art. 12 | Record-keeping & audit logs | `BatchBuffer` + `commitBatch()`, LLM wrappers |
 | Art. 13 | Transparency to users | `registerAgent()`, `getMyAgents()` |
 | Art. 14 | Human oversight | `log()` with `actionType` tagging |
-| Art. 19 | Conformity assessment logging | `BatchBuffer` + `commitBatch()`, `verifyLog()` |
+| Art. 19 | Automatically generated logs | `BatchBuffer` + `commitBatch()`, `verifyLog()` |
 | Art. 26 | Deployer obligations (KYA) | `registerAgent()`, `revokeAgent()` |
 | Art. 72 | Post-market monitoring | `enrollMonitoring()`, `recordMetric()`, `recordReview()` |
 | Art. 73 | Serious incident reporting | `reportIncident()`, `markReportedToAuthority()` |

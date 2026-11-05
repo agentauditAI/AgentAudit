@@ -310,6 +310,7 @@ describe("GET /v1/audit/:agentId/report", () => {
     expect(res.body.agent_id).toBe("1");
     expect(res.body.network).toBe("mantle");
     expect(res.body.disclaimer).toMatch(/does not determine/);
+    expect(res.body.disclaimer).toContain("Not legal advice.");
     expect(res.body.evidence.map((e: any) => e.article)).toEqual(
       ["Art. 12", "Art. 19", "Art. 26", "Art. 13", "Art. 9", "Art. 72"],
     );

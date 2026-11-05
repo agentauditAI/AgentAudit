@@ -113,11 +113,12 @@ const RISK_STATUS_LABELS = ["IDENTIFIED", "ASSESSED", "MITIGATED", "TESTED", "RE
 
 const EVIDENCE_DISCLAIMER =
   "This output lists on-chain records found by the checks above. " +
-  "It does not determine whether any obligation under the EU AI Act or any other law is satisfied.";
+  "It does not determine whether any obligation under the EU AI Act or any other law is satisfied. " +
+  "Not legal advice.";
 
 const INCIDENT_RECORD_NOTE =
   "This is an on-chain record, not a report to any authority. " +
-  "This tool does not calculate reporting deadlines: they depend on the type of incident, so confirm them with your legal team.";
+  "This tool does not calculate reporting deadlines: they depend on the type of incident, so confirm them with your legal team. Not legal advice.";
 const INCIDENT_SEVERITY_LABELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const HARM_TYPE_LABELS = ["DEATH", "SERIOUS_HEALTH_HARM", "SIGNIFICANT_PROPERTY_DAMAGE", "FUNDAMENTAL_RIGHTS_VIOLATION", "OTHER"];
 
@@ -539,7 +540,7 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
   const evidenceReportDescription =
     "List the on-chain records found for an agent in the Phase 7 contracts (RiskManagementSystem, IncidentRegistry) " +
     "on one or all of mantle, base, arbitrum, optimism, polygon. Read-only. " +
-    "It does not determine whether any legal obligation is satisfied.";
+    "It does not determine whether any legal obligation is satisfied. Not legal advice.";
 
   const evidenceReport = async ({ agent_id, network }: { agent_id: string; network: NetworkKey | "all" }) => {
       const agentId  = ethers.zeroPadValue(agent_id, 32);
