@@ -483,6 +483,7 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
       expect(r.isError).toBe(false);
       expect(r.text).toContain("not a report to any authority");
       expect(r.text).toContain("does not calculate reporting deadlines");
+      expect(r.text).toContain("Not legal advice.");
       expect(r.text).not.toMatch(/\b(2|10|15) days\b/);
     });
 
@@ -542,6 +543,7 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
       expect(base.text).toContain("IncidentRegistry (related: Art. 73): total=1  open=1");
       expect(base.text).not.toMatch(/conformity/i);
       expect(base.text).toContain("does not determine whether any obligation");
+      expect(base.text).toContain("Not legal advice.");
       expectNoOverclaim(base.text);
 
       const mantle = await call(client, "get_evidence_report", { agent_id: AGENT_B32, network: "mantle" });
