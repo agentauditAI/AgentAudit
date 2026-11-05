@@ -21,10 +21,7 @@ const KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 const PORT = 19545 + (process.pid % 1000);
 const RPC = `http://127.0.0.1:${PORT}`;
 const ROOT = path.join(__dirname, "../..");
-// anvil default account #1 — an unprivileged caller
-const ANYONE_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 const AGENT_B32 = "0x" + "ab".repeat(32);
-const SELF_CERTIFIED_B32 = "0x" + "cd".repeat(32);
 const NETS = ["mantle", "base", "arbitrum", "optimism", "polygon"] as const;
 const ALL_RPC = Object.fromEntries(NETS.map((n) => [n, RPC]));
 
@@ -79,7 +76,6 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
   let vault: ethers.Contract;
   let vaultAddr: string;
   let incidents: ethers.Contract;
-  let conformity: ethers.Contract;
   let phase7Base: Record<string, string>;
   let stopAddr: string;
   let client: Client;
@@ -117,11 +113,9 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
     vaultAddr = await vault.getAddress();
     incidents = await deploy("IncidentRegistry");
     const risk = await deploy("RiskManagementSystem");
-    conformity = await deploy("ConformityAssessment");
     phase7Base = {
       IncidentRegistry: await incidents.getAddress(),
       RiskManagementSystem: await risk.getAddress(),
-      ConformityAssessment: await conformity.getAddress(),
     };
     await (await risk.claimAgent(AGENT_B32)).wait();
     await (await risk.identifyRisk(AGENT_B32, 0, "biased ranking", "ipfs://risk")).wait();
@@ -141,10 +135,10 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
     anvil?.kill();
   });
 
-  it("lists the eight tools, including the deprecated alias", async () => {
+  it("lists the seven tools, including the deprecated alias", async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual([
-      "audit_action", "check_conformity", "get_audit_log", "get_compliance_report",
+      "audit_action", "get_audit_log", "get_compliance_report",
       "get_evidence_report", "get_risk_score", "report_incident", "verify_proof",
     ]);
   });
@@ -524,7 +518,7 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
 
   // ─── Phase 7 reads ─────────────────────────────────────────────────────────
 
-  describe("get_risk_score / check_conformity / get_evidence_report", () => {
+  describe("get_risk_score / get_evidence_report", () => {
     it("get_risk_score reads the deployed RiskManagementSystem", async () => {
       const r = await call(client, "get_risk_score", { agent_id: AGENT_B32, network: "base" });
       expect(r.isError).toBe(false);
@@ -532,37 +526,8 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
       expect(r.text).toContain("biased ranking");
     });
 
-    it("check_conformity reads the deployed ConformityAssessment", async () => {
-      const r = await call(client, "check_conformity", { agent_id: AGENT_B32, network: "base" });
-      expect(r.isError).toBe(false);
-      expect(r.text).toContain("No conformity record found for this agent.");
-      expect(r.text).toContain("On-chain record active (CERTIFIED, not expired): no");
-      expect(r.text).toContain("records are self-declared");
-      expect(r.text).toContain("does not determine whether any obligation");
-      expectNoOverclaim(r.text);
-    });
-
-    it("check_conformity: a self-certified record is shown as self-declared, never as valid", async () => {
-      const anyone = new ethers.Wallet(ANYONE_KEY, provider);
-      const asAnyone = conformity.connect(anyone) as ethers.Contract;
-      const now = (await provider.getBlock("latest"))!.timestamp;
-      await (await asAnyone.register({
-        agentId: SELF_CERTIFIED_B32, assessmentType: 1, providerName: "Anyone", providerAddress: anyone.address,
-        systemDescription: "x", notifiedBodyName: "Made-up Body", notifiedBodyRef: "0000", certificateRef: "",
-        standardsApplied: "", declarationUri: "ipfs://x", validFrom: now, validUntil: now + 86400,
-      })).wait();
-      await (await asAnyone.certify(SELF_CERTIFIED_B32)).wait();
-
-      const r = await call(client, "check_conformity", { agent_id: SELF_CERTIFIED_B32, network: "base" });
-      expect(r.isError).toBe(false);
-      expect(r.text).toContain("On-chain record active (CERTIFIED, not expired): yes");
-      expect(r.text).toContain("every field, including the notified body, is unverified");
-      expectNoOverclaim(r.text);
-    });
-
     it.each([
       ["get_risk_score", "RiskManagementSystem"],
-      ["check_conformity", "ConformityAssessment"],
     ])("%s with no code returns a clear error naming network + address, not BAD_DATA", async (tool, name) => {
       const r = await call(client, tool, { agent_id: AGENT_B32, network: "mantle" });
       expect(r.isError).toBe(true);
@@ -575,13 +540,12 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
       expect(base.text).toContain("AgentAudit — On-chain Evidence Report");
       expect(base.text).toContain("RiskManagementSystem (related: Art. 9): open=1");
       expect(base.text).toContain("IncidentRegistry (related: Art. 73): total=1  open=1");
-      expect(base.text).toContain("ConformityAssessment (related: Art. 43/44): NOT REGISTERED");
-      expect(base.text).toContain("On-chain record active: no");
+      expect(base.text).not.toMatch(/conformity/i);
       expect(base.text).toContain("does not determine whether any obligation");
       expectNoOverclaim(base.text);
 
       const mantle = await call(client, "get_evidence_report", { agent_id: AGENT_B32, network: "mantle" });
-      for (const name of ["ConformityAssessment", "RiskManagementSystem", "IncidentRegistry"]) {
+      for (const name of ["RiskManagementSystem", "IncidentRegistry"]) {
         expect(mantle.text).toMatch(new RegExp(`error — ${name} has no contract code on mantle at 0x[0-9a-fA-F]{40}`));
       }
       expect(mantle.text).not.toContain("BAD_DATA");
@@ -601,9 +565,9 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
       expect(tools.get_compliance_report).toMatch(/^Deprecated alias of get_evidence_report/);
     });
 
-    it("no tool description promises compliance", async () => {
+    it("no tool description promises compliance or conformity", async () => {
       for (const t of (await client.listTools()).tools) {
-        expect(t.description ?? "").not.toMatch(/compliance report|ensures? compliance|\bcompliant\b/i);
+        expect(t.description ?? "").not.toMatch(/compliance report|ensures? compliance|\bcompliant\b|conformity/i);
       }
     });
   });
@@ -629,7 +593,7 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
     const c = new Client({ name: "mcp-stdio-test", version: "0" });
     await c.connect(transport);
     try {
-      expect((await c.listTools()).tools).toHaveLength(8);
+      expect((await c.listTools()).tools).toHaveLength(7);
       const r = await call(c, "audit_action", { agent_id: 1, entries: [{ action_type: "A", payload: "stdio" }] });
       expect(r.isError).toBe(false);
       const out = JSON.parse(r.text);
