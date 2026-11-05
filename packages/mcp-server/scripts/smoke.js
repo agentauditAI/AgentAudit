@@ -7,7 +7,7 @@ const { StdioClientTransport } = require("@modelcontextprotocol/sdk/client/stdio
 
 const EXPECTED = [
   "audit_action", "check_conformity", "get_audit_log", "get_compliance_report",
-  "get_risk_score", "report_incident", "verify_proof",
+  "get_evidence_report", "get_risk_score", "report_incident", "verify_proof",
 ];
 
 async function main() {

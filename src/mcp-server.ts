@@ -115,6 +115,21 @@ const INCIDENT_ABI = [
 const SEVERITY_LABELS = ["NEGLIGIBLE", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const RISK_STATUS_LABELS = ["IDENTIFIED", "ASSESSED", "MITIGATED", "TESTED", "RESIDUAL", "CLOSED"];
 const CONFORMITY_STATUS_LABELS = ["PENDING", "CERTIFIED", "WITHDRAWN", "EXPIRED"];
+
+// ─── Output Notices ──────────────────────────────────────────────────────────
+
+const EVIDENCE_DISCLAIMER =
+  "This output lists on-chain records found by the checks above. " +
+  "It does not determine whether any obligation under the EU AI Act or any other law is satisfied.";
+
+const CONFORMITY_RECORD_NOTE =
+  "ConformityAssessment records are self-declared: anyone can register and certify one, " +
+  "and every field, including the notified body, is unverified. " +
+  "A record is not a conformity assessment result.";
+
+const INCIDENT_RECORD_NOTE =
+  "This is an on-chain record, not a report to any authority. " +
+  "This tool does not calculate reporting deadlines: they depend on the type of incident, so confirm them with your legal team.";
 const INCIDENT_SEVERITY_LABELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const HARM_TYPE_LABELS = ["DEATH", "SERIOUS_HEALTH_HARM", "SIGNIFICANT_PROPERTY_DAMAGE", "FUNDAMENTAL_RIGHTS_VIOLATION", "OTHER"];
 
@@ -459,7 +474,9 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
 
   server.tool(
     "check_conformity",
-    "Query the ConformityAssessment contract for an agent's EU Declaration of Conformity status (Art. 43, 44). Deployed on mantle, base, arbitrum, optimism, polygon.",
+    "Read an agent's self-declared record from the ConformityAssessment contract (related to Art. 43, 44). " +
+    "Anyone can register and certify a record, so it is not a conformity assessment result. " +
+    "Deployed on mantle, base, arbitrum, optimism, polygon.",
     {
       agent_id: z.string().regex(/^0x[0-9a-fA-F]{1,64}$/).describe("Agent ID as a hex bytes32 string"),
       network:  networkEnum.default("mantle"),
@@ -483,7 +500,7 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
         `check_conformity — network=${network}  agentId=${agent_id}`,
         `contract=${addr}`,
         "",
-        `Valid (certified + not expired): ${isValid ? "YES ✓" : "NO ✗"}`,
+        `On-chain record active (CERTIFIED, not expired): ${isValid ? "yes" : "no"}`,
       ];
 
       if (record) {
@@ -508,6 +525,8 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
         lines.push("No conformity record found for this agent.");
       }
 
+      lines.push("", CONFORMITY_RECORD_NOTE, EVIDENCE_DISCLAIMER);
+
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
   );
@@ -516,7 +535,8 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
 
   server.tool(
     "report_incident",
-    "Register a serious AI incident with IncidentRegistry v2 (EU AI Act Art. 73). Live on mantle, base, arbitrum, optimism, polygon. " +
+    "Record a serious AI incident on IncidentRegistry v2 (related to EU AI Act Art. 73). Live on mantle, base, arbitrum, optimism, polygon. " +
+    "This is an on-chain record only, not a report to any authority. " +
     "Fails unless the registry has code and the transaction emits IncidentRegistered.",
     {
       agent_id:          z.string().regex(/^0x[0-9a-fA-F]{1,64}$/).describe("Agent ID as a hex bytes32 string"),
@@ -562,13 +582,11 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
         throw new Error(`Incident NOT registered: tx ${tx.hash} on ${network} emitted no IncidentRegistered from ${addr}`);
       }
 
-      const deadline = severity === "CRITICAL" ? "2 days" : severity === "HIGH" ? "10 days" : "15 days";
-
       return {
         content: [{
           type: "text",
           text: [
-            `report_incident — Art. 73`,
+            `report_incident — IncidentRegistry v2 (related: Art. 73)`,
             `network=${network}  contract=${addr}`,
             "",
             `Incident ID      : ${incidentId}`,
@@ -576,30 +594,33 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
             `Severity         : ${severity}`,
             `Harm type        : ${harm_type}`,
             `Affected persons : ${affected_persons}`,
-            `Art. 73§2 deadline: report to authority within ${deadline} of occurrence`,
+            "",
+            INCIDENT_RECORD_NOTE,
           ].join("\n"),
         }],
       };
     }
   );
 
-  // ─── Tool 7: get_compliance_report ───────────────────────────────────────────
+  // ─── Tool 7: get_evidence_report (+ deprecated get_compliance_report alias) ──
 
-  server.tool(
-    "get_compliance_report",
-    "Generate an EU AI Act compliance report for an agent from the Phase 7 contracts (ConformityAssessment, RiskManagementSystem, IncidentRegistry) " +
-    "on one or all of mantle, base, arbitrum, optimism, polygon. Read-only.",
-    {
-      agent_id: z.string().regex(/^0x[0-9a-fA-F]{1,64}$/).describe("Agent ID as a hex bytes32 string"),
-      network:  z.enum([...NETWORKS, "all"]).default("all"),
-    },
-    async ({ agent_id, network }) => {
+  const evidenceReportSchema = {
+    agent_id: z.string().regex(/^0x[0-9a-fA-F]{1,64}$/).describe("Agent ID as a hex bytes32 string"),
+    network:  z.enum([...NETWORKS, "all"]).default("all"),
+  };
+
+  const evidenceReportDescription =
+    "List the on-chain records found for an agent in the Phase 7 contracts (ConformityAssessment, RiskManagementSystem, IncidentRegistry) " +
+    "on one or all of mantle, base, arbitrum, optimism, polygon. Read-only. " +
+    "It does not determine whether any legal obligation is satisfied.";
+
+  const evidenceReport = async ({ agent_id, network }: { agent_id: string; network: NetworkKey | "all" }) => {
       const agentId  = ethers.zeroPadValue(agent_id, 32);
       const targets: NetworkKey[] = network === "all" ? [...NETWORKS] : [network];
 
       const lines = [
         "═══════════════════════════════════════════════════════════",
-        "  AgentAudit — EU AI Act Compliance Report",
+        "  AgentAudit — On-chain Evidence Report",
         `  Agent   : ${agent_id}`,
         `  Date    : ${new Date().toISOString()}`,
         "═══════════════════════════════════════════════════════════",
@@ -609,7 +630,7 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
         const p = provider(net);
         lines.push("", `── Network: ${net.toUpperCase()} ──────────────────────────────────`);
 
-        // Art. 43/44 — Conformity Assessment
+        // ConformityAssessment
         try {
           const addr = phase7Address(net, "ConformityAssessment");
           await requireCode(net, addr, "ConformityAssessment");
@@ -623,14 +644,14 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
             validUntil  = new Date(Number(rec.validUntil) * 1000).toISOString().slice(0, 10);
           } catch { /* not registered */ }
           lines.push(
-            `  Art. 43/44 Conformity  : ${statusLabel}${validUntil ? `  (expires ${validUntil})` : ""}`,
-            `    → Currently valid    : ${isValid ? "YES ✓" : "NO ✗"}`
+            `  ConformityAssessment (related: Art. 43/44): ${statusLabel}${validUntil ? `  (expires ${validUntil})` : ""}`,
+            `    → On-chain record active: ${isValid ? "yes" : "no"}`
           );
         } catch (e) {
-          lines.push(`  Art. 43/44 Conformity  : error — ${errorMessage(e)}`);
+          lines.push(`  ConformityAssessment (related: Art. 43/44): error — ${errorMessage(e)}`);
         }
 
-        // Art. 9 — Risk Management
+        // RiskManagementSystem
         try {
           const addr = phase7Address(net, "RiskManagementSystem");
           await requireCode(net, addr, "RiskManagementSystem");
@@ -641,13 +662,13 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
             risk.risksAboveSeverity(agentId, 4),
           ]);
           lines.push(
-            `  Art. 9   Risk Mgmt     : open=${openCount}  HIGH+=${highCount}  CRITICAL=${criticalCount}`
+            `  RiskManagementSystem (related: Art. 9): open=${openCount}  HIGH+=${highCount}  CRITICAL=${criticalCount}`
           );
         } catch (e) {
-          lines.push(`  Art. 9   Risk Mgmt     : error — ${errorMessage(e)}`);
+          lines.push(`  RiskManagementSystem (related: Art. 9): error — ${errorMessage(e)}`);
         }
 
-        // Art. 73 — Incident Registry
+        // IncidentRegistry
         try {
           const addr = phase7Address(net, "IncidentRegistry");
           await requireCode(net, addr, "IncidentRegistry");
@@ -659,10 +680,10 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
             if (Number(inc.status) < 3) openIncidents++; // < RESOLVED
           }
           lines.push(
-            `  Art. 73  Incidents     : total=${ids.length}  open=${openIncidents}`
+            `  IncidentRegistry (related: Art. 73): total=${ids.length}  open=${openIncidents}`
           );
         } catch (e) {
-          lines.push(`  Art. 73  Incidents     : error — ${errorMessage(e)}`);
+          lines.push(`  IncidentRegistry (related: Art. 73): error — ${errorMessage(e)}`);
         }
       }
 
@@ -671,11 +692,22 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
         "═══════════════════════════════════════════════════════════",
         "  Contracts queried: ConformityAssessment, RiskManagementSystem,",
         "  IncidentRegistry (Phase 7 deployment)",
+        "",
+        `  ${CONFORMITY_RECORD_NOTE}`,
+        `  ${EVIDENCE_DISCLAIMER}`,
         "═══════════════════════════════════════════════════════════",
       );
 
-      return { content: [{ type: "text", text: lines.join("\n") }] };
-    }
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+  };
+
+  server.tool("get_evidence_report", evidenceReportDescription, evidenceReportSchema, evidenceReport);
+
+  server.tool(
+    "get_compliance_report",
+    `Deprecated alias of get_evidence_report; it will be removed in the next major version. ${evidenceReportDescription}`,
+    evidenceReportSchema,
+    evidenceReport
   );
 
   return server;
