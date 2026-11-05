@@ -196,19 +196,16 @@ and `isWithinDeadline(incidentId)`.
 
 ---
 
-## EU AI Act Coverage
+## EU AI Act Evidence Mapping
 
 | Article | Related obligation | SDK method |
 |---------|-----------|------------|
-| Art. 9 | Risk management system | `log()` with `riskLevel` |
-| Art. 11 | Technical documentation | `registerAgent()` |
 | Art. 12 | Record-keeping & audit logs | `BatchBuffer` + `commitBatch()`, LLM wrappers |
-| Art. 13 | Transparency to users | `registerAgent()`, `getMyAgents()` |
-| Art. 14 | Human oversight | `log()` with `actionType` tagging |
 | Art. 19 | Automatically generated logs | `BatchBuffer` + `commitBatch()`, `verifyLog()` |
 | Art. 26 | Deployer obligations (KYA) | `registerAgent()`, `revokeAgent()` |
-| Art. 72 | Post-market monitoring | `enrollMonitoring()`, `recordMetric()`, `recordReview()` |
-| Art. 73 | Serious incident reporting | `reportIncident()`, `markReportedToAuthority()` |
+| Art. 73 | Serious incident records | `reportIncident()`, `markReportedToAuthority()` |
+
+These methods provide evidence. They do not determine whether any obligation is satisfied. Not legal advice.
 
 ---
 
