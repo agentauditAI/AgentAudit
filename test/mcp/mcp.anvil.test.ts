@@ -63,6 +63,10 @@ async function call(client: Client, name: string, args: Record<string, unknown>)
   return { isError: !!r.isError, text: (r.content as { text: string }[]).map((c) => c.text).join("\n") };
 }
 
+function expectNoOverclaim(text: string): void {
+  expect(text).not.toMatch(/compliance report|\bcompliant\b|YES ✓|NO ✗|Valid \(certified/i);
+}
+
 // ─── Suite ───────────────────────────────────────────────────────────────────
 
 describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
@@ -109,11 +113,9 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
     vaultAddr = await vault.getAddress();
     incidents = await deploy("IncidentRegistry");
     const risk = await deploy("RiskManagementSystem");
-    const conformity = await deploy("ConformityAssessment");
     phase7Base = {
       IncidentRegistry: await incidents.getAddress(),
       RiskManagementSystem: await risk.getAddress(),
-      ConformityAssessment: await conformity.getAddress(),
     };
     await (await risk.claimAgent(AGENT_B32)).wait();
     await (await risk.identifyRisk(AGENT_B32, 0, "biased ranking", "ipfs://risk")).wait();
@@ -133,11 +135,11 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
     anvil?.kill();
   });
 
-  it("lists the seven tools", async () => {
+  it("lists the seven tools, including the deprecated alias", async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual([
-      "audit_action", "check_conformity", "get_audit_log", "get_compliance_report",
-      "get_risk_score", "report_incident", "verify_proof",
+      "audit_action", "get_audit_log", "get_compliance_report",
+      "get_evidence_report", "get_risk_score", "report_incident", "verify_proof",
     ]);
   });
 
@@ -474,6 +476,16 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
       expect(ids.map(Number)).toEqual([1]);
     });
 
+    it("output says it is an on-chain record and calculates no legal deadline", async () => {
+      const r = await call(client, "report_incident", {
+        ...INCIDENT, severity: "LOW", harm_type: "DEATH", agent_id: "0x" + "ef".repeat(32), network: "base",
+      });
+      expect(r.isError).toBe(false);
+      expect(r.text).toContain("not a report to any authority");
+      expect(r.text).toContain("does not calculate reporting deadlines");
+      expect(r.text).not.toMatch(/\b(2|10|15) days\b/);
+    });
+
     it("no code at the registry: clear error naming network + address, nothing sent", async () => {
       const before = await nonce();
       const r = await call(client, "report_incident", { ...INCIDENT, network: "mantle" });
@@ -506,7 +518,7 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
 
   // ─── Phase 7 reads ─────────────────────────────────────────────────────────
 
-  describe("get_risk_score / check_conformity / get_compliance_report", () => {
+  describe("get_risk_score / get_evidence_report", () => {
     it("get_risk_score reads the deployed RiskManagementSystem", async () => {
       const r = await call(client, "get_risk_score", { agent_id: AGENT_B32, network: "base" });
       expect(r.isError).toBe(false);
@@ -514,15 +526,8 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
       expect(r.text).toContain("biased ranking");
     });
 
-    it("check_conformity reads the deployed ConformityAssessment", async () => {
-      const r = await call(client, "check_conformity", { agent_id: AGENT_B32, network: "base" });
-      expect(r.isError).toBe(false);
-      expect(r.text).toContain("No conformity record found for this agent.");
-    });
-
     it.each([
       ["get_risk_score", "RiskManagementSystem"],
-      ["check_conformity", "ConformityAssessment"],
     ])("%s with no code returns a clear error naming network + address, not BAD_DATA", async (tool, name) => {
       const r = await call(client, tool, { agent_id: AGENT_B32, network: "mantle" });
       expect(r.isError).toBe(true);
@@ -530,23 +535,40 @@ describeAnvil("MCP server × AuditVault v2 + Phase 7 on anvil", () => {
       expect(r.text).not.toContain("BAD_DATA");
     });
 
-    it("get_compliance_report: live sections on base, clear no-code errors on mantle", async () => {
-      const base = await call(client, "get_compliance_report", { agent_id: AGENT_B32, network: "base" });
-      expect(base.text).toContain("Art. 9   Risk Mgmt     : open=1");
-      expect(base.text).toContain("Art. 73  Incidents     : total=1  open=1");
-      expect(base.text).toContain("Art. 43/44 Conformity  : NOT REGISTERED");
+    it("get_evidence_report: live sections on base, clear no-code errors on mantle", async () => {
+      const base = await call(client, "get_evidence_report", { agent_id: AGENT_B32, network: "base" });
+      expect(base.text).toContain("AgentAudit — On-chain Evidence Report");
+      expect(base.text).toContain("RiskManagementSystem (related: Art. 9): open=1");
+      expect(base.text).toContain("IncidentRegistry (related: Art. 73): total=1  open=1");
+      expect(base.text).not.toMatch(/conformity/i);
+      expect(base.text).toContain("does not determine whether any obligation");
+      expectNoOverclaim(base.text);
 
-      const mantle = await call(client, "get_compliance_report", { agent_id: AGENT_B32, network: "mantle" });
-      for (const name of ["ConformityAssessment", "RiskManagementSystem", "IncidentRegistry"]) {
+      const mantle = await call(client, "get_evidence_report", { agent_id: AGENT_B32, network: "mantle" });
+      for (const name of ["RiskManagementSystem", "IncidentRegistry"]) {
         expect(mantle.text).toMatch(new RegExp(`error — ${name} has no contract code on mantle at 0x[0-9a-fA-F]{40}`));
       }
       expect(mantle.text).not.toContain("BAD_DATA");
     });
 
-    it("get_compliance_report all: every network section is present", async () => {
-      const r = await call(client, "get_compliance_report", { agent_id: AGENT_B32 });
+    it("get_evidence_report all: every network section is present", async () => {
+      const r = await call(client, "get_evidence_report", { agent_id: AGENT_B32 });
       for (const n of NETS) expect(r.text).toContain(`── Network: ${n.toUpperCase()}`);
       expect(r.text).not.toContain("BAD_DATA");
+    });
+
+    it("get_compliance_report stays as a deprecated alias with the same neutral output", async () => {
+      const r = await call(client, "get_compliance_report", { agent_id: AGENT_B32, network: "base" });
+      expect(r.text).toContain("AgentAudit — On-chain Evidence Report");
+      expectNoOverclaim(r.text);
+      const tools = Object.fromEntries((await client.listTools()).tools.map((t) => [t.name, t.description ?? ""]));
+      expect(tools.get_compliance_report).toMatch(/^Deprecated alias of get_evidence_report/);
+    });
+
+    it("no tool description promises compliance or conformity", async () => {
+      for (const t of (await client.listTools()).tools) {
+        expect(t.description ?? "").not.toMatch(/compliance report|ensures? compliance|\bcompliant\b|conformity/i);
+      }
     });
   });
 

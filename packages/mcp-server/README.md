@@ -1,12 +1,12 @@
 # @agentauditai/mcp-server
 
-MCP (Model Context Protocol) server for [AgentAudit](https://github.com/agentauditAI/AgentAudit): on-chain audit logging and incident reporting for AI agents under the EU AI Act. Works with Claude, Cursor and any MCP client over stdio.
+MCP (Model Context Protocol) server for [AgentAudit](https://github.com/agentauditAI/AgentAudit): on-chain audit logging and incident records for AI agents, providing evidence that supports EU AI Act record-keeping. It does not determine whether any legal obligation is satisfied. Works with Claude, Cursor and any MCP client over stdio.
 
 | What | Where it is live |
 |---|---|
 | Audit logging: `audit_action`, `get_audit_log`, `verify_proof` (AuditVault v2, Art. 12, 19) | **Base only**: AuditVault v2 `0xCeE831070aa9081422f30df5559c125aa47A75DB` |
-| Incident reporting: `report_incident` (IncidentRegistry v2, Art. 73) | **5 networks**: mantle, base, arbitrum, optimism, polygon |
-| Compliance reads: `get_compliance_report`, `get_risk_score`, `check_conformity` (Art. 9, 43, 44, 73) | mantle, base, arbitrum, optimism, polygon |
+| Incident records: `report_incident` (IncidentRegistry v2, related to Art. 73) | **5 networks**: mantle, base, arbitrum, optimism, polygon |
+| Evidence reads: `get_evidence_report`, `get_risk_score` (related to Art. 9, 73) | mantle, base, arbitrum, optimism, polygon |
 
 ## Install and run
 
@@ -62,11 +62,19 @@ Checks one entry's inclusion proof with AuditVault v2 `verifyLog`. The leaf is a
 
 ### `report_incident` (write, 5 networks)
 
-Registers a serious incident on IncidentRegistry v2 (Art. 73). Before sending, it checks the registry has code. After mining, it requires an `IncidentRegistered` event from the registry address; otherwise it returns an error and never reports success. The result includes the Art. 73§2 reporting deadline (2 / 10 / 15 days by severity).
+Records a serious incident on IncidentRegistry v2 (related to Art. 73). This is an on-chain record, not a report to any authority. Before sending, it checks the registry has code. After mining, it requires an `IncidentRegistered` event from the registry address; otherwise it returns an error and never reports success. It does not calculate reporting deadlines: they depend on the type of incident, so confirm them with your legal team.
 
-### `get_compliance_report`, `get_risk_score`, `check_conformity` (read)
+### `get_evidence_report`, `get_risk_score` (read)
 
-Read the Phase 7 contracts: ConformityAssessment (Art. 43, 44), RiskManagementSystem (Art. 9) and IncidentRegistry (Art. 73). If a contract has no code on the selected network, the tool returns an error naming the network and address.
+Read the Phase 7 contracts: RiskManagementSystem (related to Art. 9) and IncidentRegistry (related to Art. 73). If a contract has no code on the selected network, the tool returns an error naming the network and address.
+
+These tools list on-chain records. They do not determine whether any obligation under the EU AI Act or any other law is satisfied.
+
+`get_compliance_report` is a deprecated alias of `get_evidence_report` and will be removed in a future major version.
+
+## Evidence, not certification
+
+AgentAudit provides on-chain evidence. It does not certify AI systems, issue conformity assessments or replace an assessment under the EU AI Act. `check_conformity` was removed for this reason.
 
 ## Base Builder Code attribution
 
