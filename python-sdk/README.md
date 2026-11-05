@@ -2,7 +2,7 @@
 
 Evidence for EU AI Act record-keeping (supports Art. 12/19/26) for AI agents: on-chain audit logs, KYA registration, incident reporting and post-market monitoring. See "Supported networks" for what is live where.
 
-**Enforcement deadline: August 2, 2026.**
+It provides evidence, not certification, and does not determine whether any legal obligation is satisfied. Not legal advice.
 
 [![PyPI](https://img.shields.io/pypi/v/agentauditai-sdk)](https://pypi.org/project/agentauditai-sdk/)
 [![license](https://img.shields.io/pypi/l/agentauditai-sdk)](LICENSE)
@@ -66,27 +66,27 @@ print(f"Logged on-chain: {result.tx_hash}")
 print(f"Merkle root: {result.merkle_root}")   # sha256: digest — raw data stays local
 ```
 
-### 3. Get risk score (Art. 9 — risk management)
+### 3. Read the self-reported score (related to Art. 9)
 
 ```python
 risk = await client.get_risk_score(agent_address="0xYourAgentAddress")
 print(f"Level: {risk.level}   Score: {risk.score:.2f}")
-print(f"Status: {risk.compliance_status}")
 ```
 
-### 4. Get compliance report (Art. 72 — post-market monitoring)
+### 4. Get an evidence report
 
 ```python
-report = await client.get_compliance_report(agent_address="0xYourAgentAddress")
+report = await client.get_evidence_report(agent_address="0xYourAgentAddress")
 print(f"Registered: {report.registered}")
 print(f"Total events logged: {report.total_events}")
-print(f"Compliance: {report.compliance_status}")
-for ob in report.obligations:
-    status = "PASS" if ob["met"] else "FAIL"
-    print(f"  [{status}] {ob['article']} — {ob['obligation']}")
+print(f"Batches: {report.batch_count}")
+print(f"Self-reported score: {report.self_reported_score}")
+print(report.disclaimer)
 ```
 
-### 5. Report a serious incident (Art. 73 — incident reporting)
+The score is supplied by the caller and AuditVault v2 does not verify who commits a batch. `get_compliance_report()` is a deprecated alias.
+
+### 5. Record a serious incident (related to Art. 73)
 
 ```python
 incident = await client.report_incident(
@@ -124,17 +124,15 @@ response = await llm.ainvoke("Summarise the customer complaint")
 
 ---
 
-## EU AI Act Coverage
+## EU AI Act Evidence Mapping
 
-| Article | Obligation | Method |
+| Article | Related obligation | Method |
 |---------|-----------|--------|
-| Art. 9  | Risk management system | `get_risk_score()` |
 | Art. 12 | Record-keeping & audit logs | `audit_action()` |
 | Art. 13 | Transparency / KYA | `register_agent()` |
-| Art. 19 | Conformity assessment logging | `audit_action()` |
+| Art. 19 | Automatically generated logs | `audit_action()` |
 | Art. 26 | Deployer obligations | `register_agent()` |
-| Art. 72 | Post-market monitoring | `get_compliance_report()` |
-| Art. 73 | Serious incident reporting | `report_incident()` |
+| Art. 73 | Serious incident records | `report_incident()` |
 
 ---
 
