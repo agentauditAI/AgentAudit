@@ -89,3 +89,12 @@ jobs:
       # tests run.
       - name: jest
         run: npx jest
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: pytest (python-sdk)
+        run: |
+          pip install -e "python-sdk[dev]"
+          pytest python-sdk
