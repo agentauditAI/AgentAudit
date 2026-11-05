@@ -3,6 +3,7 @@ from .models import (
     AgentRegistration,
     AuditAction,
     ComplianceReport,
+    EvidenceReport,
     IncidentReport,
     RiskScore,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "AgentRegistration",
     "AuditAction",
     "ComplianceReport",
+    "EvidenceReport",
     "IncidentReport",
     "RiskScore",
 ]

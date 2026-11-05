@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import time
+import warnings
 from typing import Any, Dict, Literal, Optional
 
 from web3 import AsyncWeb3, AsyncHTTPProvider
@@ -14,7 +15,7 @@ from web3.types import TxReceipt
 from .models import (
     AgentRegistration,
     AuditAction,
-    ComplianceReport,
+    EvidenceReport,
     HarmType,
     IncidentReport,
     RiskScore,
@@ -124,17 +125,6 @@ _INCIDENT_REGISTRY_ABI = [
     },
 ]
 
-_ARTICLE_OBLIGATIONS = [
-    {"article": "Art. 9", "obligation": "Risk management system maintained"},
-    {"article": "Art. 12", "obligation": "Audit logs recorded on-chain"},
-    {"article": "Art. 13", "obligation": "Agent identity registered (KYA)"},
-    {"article": "Art. 19", "obligation": "Conformity assessment logged"},
-    {"article": "Art. 26", "obligation": "Deployer obligations met"},
-    {"article": "Art. 72", "obligation": "Post-market monitoring active"},
-    {"article": "Art. 73", "obligation": "Serious incidents reported"},
-]
-
-
 class AgentAuditError(Exception):
     """Raised on on-chain or configuration errors."""
 
@@ -143,9 +133,10 @@ class AgentAuditClient:
     """
     Async client for direct on-chain AgentAudit interactions.
 
-    Provides EU AI Act compliance for AI agents: immutable audit logs,
-    KYA registration, risk scoring, compliance reporting, and incident
-    reporting across Mantle, Base, Arbitrum, Optimism, and Polygon.
+    Provides on-chain evidence for AI agents: audit logs, KYA registration,
+    self-reported scores, evidence reports and incident records across
+    Mantle, Base, Arbitrum, Optimism, and Polygon. It does not determine
+    whether any legal obligation is satisfied.
 
     Args:
         network: EVM network name (mantle | base | arbitrum | optimism | polygon).
@@ -268,7 +259,7 @@ class AgentAuditClient:
             agent_address: Checksummed Ethereum address of the AI agent.
             action: Action label (e.g. "LLM_DECISION", "TOOL_CALL").
             data: Arbitrary dict describing the action — hashed, never stored raw.
-            risk_level: Compliance risk classification for this action.
+            risk_level: Risk label for this action.
         """
         checksummed = AsyncWeb3.to_checksum_address(agent_address)
         payload_hash = self.hash_payload({"action": action, "data": data, "risk": risk_level})
@@ -290,10 +281,11 @@ class AgentAuditClient:
 
     async def get_risk_score(self, agent_address: str) -> RiskScore:
         """
-        Return the current on-chain risk score for an agent (Art. 9 — risk management).
+        Return the self-reported on-chain score for an agent (related to Art. 9).
 
-        Reads the latest compliance score from AuditVault and maps it to a
-        normalised 0.0–1.0 float and a qualitative risk level.
+        Reads the latest score from AuditVault and maps it to a normalised
+        0.0–1.0 float and a label. The score is supplied by the caller who
+        committed the batch, so this is not a risk assessment.
 
         Args:
             agent_address: Checksummed Ethereum address of the AI agent.
@@ -303,15 +295,15 @@ class AgentAuditClient:
 
         normalised = round(raw / 255.0, 4)
         if raw >= 200:
-            level, status = "LOW", "COMPLIANT"
+            level = "LOW"
         elif raw >= 150:
-            level, status = "MEDIUM", "PARTIALLY_COMPLIANT"
+            level = "MEDIUM"
         elif raw >= 80:
-            level, status = "HIGH", "NON_COMPLIANT"
+            level = "HIGH"
         elif raw > 0:
-            level, status = "CRITICAL", "CRITICAL_NON_COMPLIANT"
+            level = "CRITICAL"
         else:
-            level, status = "UNKNOWN", "UNREGISTERED"
+            level = "UNKNOWN"
 
         return RiskScore(
             agent_address=checksummed,
@@ -319,15 +311,15 @@ class AgentAuditClient:
             raw_score=raw,
             score=normalised,
             level=level,
-            compliance_status=status,
         )
 
-    async def get_compliance_report(self, agent_address: str) -> ComplianceReport:
+    async def get_evidence_report(self, agent_address: str) -> EvidenceReport:
         """
-        Generate a full EU AI Act compliance report (Art. 72 — post-market monitoring).
+        List the on-chain records found for an agent.
 
-        Reads agent registration info, batch count, and compliance score from
-        AuditVault to produce a structured report covering all applicable articles.
+        Reads agent registration info, batch count and the self-reported score
+        from AuditVault. It does not determine whether any legal obligation is
+        satisfied.
 
         Args:
             agent_address: Checksummed Ethereum address of the AI agent.
@@ -340,21 +332,7 @@ class AgentAuditClient:
 
         registered, agent_type, framework, network_tag, registered_at, total_events = info
 
-        if score >= 200:
-            status = "COMPLIANT"
-        elif score >= 150:
-            status = "PARTIALLY_COMPLIANT"
-        elif score > 0:
-            status = "NON_COMPLIANT"
-        else:
-            status = "UNREGISTERED" if not registered else "NO_SCORE"
-
-        obligations = [
-            {**ob, "met": registered and score >= 150}
-            for ob in _ARTICLE_OBLIGATIONS
-        ]
-
-        return ComplianceReport(
+        return EvidenceReport(
             agent_address=checksummed,
             network=self._network,
             registered=registered,
@@ -363,11 +341,17 @@ class AgentAuditClient:
             registered_at=registered_at,
             total_events=total_events,
             batch_count=batch_count,
-            compliance_score=score,
-            compliance_status=status,
-            applicable_articles=[ob["article"] for ob in _ARTICLE_OBLIGATIONS],
-            obligations=obligations,
+            self_reported_score=score,
         )
+
+    async def get_compliance_report(self, agent_address: str) -> EvidenceReport:
+        """Deprecated alias of get_evidence_report; removed in a future major version."""
+        warnings.warn(
+            "get_compliance_report is deprecated; use get_evidence_report",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.get_evidence_report(agent_address)
 
     async def report_incident(
         self,
@@ -380,10 +364,10 @@ class AgentAuditClient:
         occurred_at: Optional[int] = None,
     ) -> IncidentReport:
         """
-        Register a serious incident on-chain (Art. 73 — incident reporting).
+        Record a serious incident on-chain (related to Art. 73).
 
-        Writes an immutable incident record to the IncidentRegistry, triggering
-        the Art. 73 reporting deadline clock on-chain.
+        Writes an incident record to the IncidentRegistry. This is an on-chain
+        record, not a report to any authority, and it calculates no legal deadline.
 
         Args:
             agent_address: Checksummed Ethereum address of the AI agent.

@@ -36,17 +36,26 @@ class AuditAction(BaseModel):
     articles: List[str] = Field(default=["Art. 12", "Art. 19"])
 
 
+EVIDENCE_DISCLAIMER = (
+    "This output lists on-chain records. The score is reported by the caller and "
+    "AuditVault v2 does not verify who commits a batch. It does not determine whether "
+    "any obligation under the EU AI Act or any other law is satisfied. Not legal advice."
+)
+
+
 class RiskScore(BaseModel):
     agent_address: str
     network: str
-    raw_score: int = Field(ge=0, le=255, description="On-chain compliance score (0–255)")
+    raw_score: int = Field(ge=0, le=255, description="Self-reported on-chain score (0–255)")
     score: float = Field(ge=0.0, le=1.0, description="Normalised score (0.0–1.0)")
-    level: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
-    compliance_status: str
-    articles: List[str] = Field(default=["Art. 9"])
+    level: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"] = Field(
+        description="Label derived from the self-reported score; not a risk assessment"
+    )
+    articles: List[str] = Field(default=["Art. 9"], description="Related articles")
+    disclaimer: str = EVIDENCE_DISCLAIMER
 
 
-class ComplianceReport(BaseModel):
+class EvidenceReport(BaseModel):
     agent_address: str
     network: str
     registered: bool
@@ -55,10 +64,13 @@ class ComplianceReport(BaseModel):
     registered_at: int
     total_events: int
     batch_count: int
-    compliance_score: int
-    compliance_status: str
-    applicable_articles: List[str]
-    obligations: List[Dict[str, Any]]
+    self_reported_score: int = Field(description="Score supplied by the caller; unverified")
+    related_articles: List[str] = Field(default=["Art. 12", "Art. 19", "Art. 26"])
+    disclaimer: str = EVIDENCE_DISCLAIMER
+
+
+# Deprecated name, kept so existing imports keep working
+ComplianceReport = EvidenceReport
 
 
 class IncidentReport(BaseModel):

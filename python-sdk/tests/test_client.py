@@ -174,13 +174,14 @@ async def test_audit_action_hashes_payload(client):
 # ─── get_risk_score ───────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_get_risk_score_compliant(client):
-    # Default mock score is 210 → COMPLIANT
+async def test_get_risk_score_low(client):
+    # Default mock score is 210 → LOW label, never a compliance verdict
     result = await client.get_risk_score(AGENT_ADDR)
     assert result.agent_address == AGENT_ADDR
     assert result.raw_score == 210
     assert result.level == "LOW"
-    assert result.compliance_status == "COMPLIANT"
+    assert not hasattr(result, "compliance_status")
+    assert "Not legal advice." in result.disclaimer
     assert 0.0 <= result.score <= 1.0
     assert "Art. 9" in result.articles
 
@@ -191,7 +192,6 @@ async def test_get_risk_score_critical(client):
     client._vault.functions.getLatestComplianceScore.return_value.call = AsyncMock(return_value=50)
     result = await client.get_risk_score(AGENT_ADDR)
     assert result.level == "CRITICAL"
-    assert result.compliance_status == "CRITICAL_NON_COMPLIANT"
 
 
 @pytest.mark.asyncio
@@ -199,33 +199,41 @@ async def test_get_risk_score_unregistered(client):
     client._vault.functions.getLatestComplianceScore.return_value.call = AsyncMock(return_value=0)
     result = await client.get_risk_score(AGENT_ADDR)
     assert result.level == "UNKNOWN"
-    assert result.compliance_status == "UNREGISTERED"
 
 
-# ─── get_compliance_report ────────────────────────────────────────────────────
+# ─── get_evidence_report ──────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_get_compliance_report_structure(client):
-    result = await client.get_compliance_report(AGENT_ADDR)
+async def test_get_evidence_report_structure(client):
+    result = await client.get_evidence_report(AGENT_ADDR)
     assert result.agent_address == AGENT_ADDR
     assert result.registered is True
     assert result.agent_type == "LLM_AGENT"
     assert result.framework == "langchain"
     assert result.total_events == 42
     assert result.batch_count == 7
-    assert result.compliance_score == 210
-    assert result.compliance_status == "COMPLIANT"
-    assert len(result.applicable_articles) > 0
-    assert all(isinstance(ob, dict) for ob in result.obligations)
-    assert all("article" in ob and "obligation" in ob and "met" in ob for ob in result.obligations)
+    assert result.self_reported_score == 210
+    assert "does not determine" in result.disclaimer
+    assert "Not legal advice." in result.disclaimer
 
 
 @pytest.mark.asyncio
-async def test_get_compliance_report_non_compliant(client):
-    client._vault.functions.getLatestComplianceScore.return_value.call = AsyncMock(return_value=100)
-    result = await client.get_compliance_report(AGENT_ADDR)
-    assert result.compliance_status == "NON_COMPLIANT"
-    assert all(ob["met"] is False for ob in result.obligations)
+@pytest.mark.parametrize("score", [0, 100, 150, 255])
+async def test_get_evidence_report_gives_no_verdict_at_any_score(client, score):
+    client._vault.functions.getLatestComplianceScore.return_value.call = AsyncMock(return_value=score)
+    dumped = (await client.get_evidence_report(AGENT_ADDR)).model_dump()
+    assert dumped["self_reported_score"] == score
+    assert "compliance_status" not in dumped
+    assert "obligations" not in dumped
+    text = str({k: v for k, v in dumped.items() if k != "disclaimer"}).upper()
+    assert "COMPLIANT" not in text
+
+
+@pytest.mark.asyncio
+async def test_get_compliance_report_is_a_deprecated_alias(client):
+    with pytest.warns(DeprecationWarning, match="get_evidence_report"):
+        result = await client.get_compliance_report(AGENT_ADDR)
+    assert result == await client.get_evidence_report(AGENT_ADDR)
 
 
 # ─── report_incident ──────────────────────────────────────────────────────────
