@@ -160,6 +160,10 @@ Extends `BaseCallbackHandler` — the idiomatic LangChain approach. Attach to an
 - Networks: mantle, base, arbitrum, optimism, polygon — base/arbitrum/optimism/polygon require env vars to be set or routes return 503
 - Tests live in `test/api/server.test.ts` using Jest + supertest; the `chain.ts` module is mocked entirely — tests never touch a real network
 
+## Python SDK (`python-sdk/`)
+
+- `get_evidence_report()` (`get_compliance_report()` is a deprecated alias) and `get_risk_score()` return records, a self-reported score and a disclaimer; never `met`, `compliance_status` or `COMPLIANT`
+
 ## ElizaOS Plugin (`plugin-elizaos/`)
 
 The plugin is a standalone CommonJS package — **do not modify it** without understanding its versioning separately from the rest of the repo.
