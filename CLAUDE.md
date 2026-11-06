@@ -56,7 +56,7 @@ scripts/             ← Hardhat deployment scripts
 docs/                ← Architecture, compliance, threat-model docs
 lib/forge-std/       ← Foundry standard library (do not edit)
 lib/openzeppelin-contracts/ ← OpenZeppelin v5.7.0, tag commit cab19933c33c2ad1d4c7a84864a3601dddfd16f3, `contracts/` + LICENSE only (vendored, do not edit); used only by contracts/v3/
-contracts/v3/        ← AuditVault v3 (docs/design/AUDITVAULT_V3.md); toolchain skeleton only so far
+contracts/v3/        ← AuditVault v3 (docs/design/AUDITVAULT_V3.md): implemented and unit-tested, not deployed. Fork tests against the real ERC-8004 registry: test/AuditVaultV3.fork.t.sol, skipped unless BASE_RPC_URL / CELO_RPC_URL is set
 out/                 ← Foundry build artifacts (do not edit or commit)
 ```
 
