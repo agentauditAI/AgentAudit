@@ -2,6 +2,29 @@
 
 All notable changes to this package. Versions follow [SemVer](https://semver.org/).
 
+## 1.2.0 — 2026-11-08
+
+### Added
+- **Base Builder Code attribution (ERC-8021), on by default.** Every state-changing
+  SDK call (`commitBatch`, `logAction`, `logActionBatch`, `registerAgent`,
+  `revokeAgent`, `reportIncident`, `markReportedToAuthority`, PostMarketMonitor
+  writes) appends a 29-byte schema-0 suffix for AgentAudit's code `bc_pd681w25` to
+  the calldata. Only when the RPC reports chain id 8453 (Base) or 84532 (Base
+  Sepolia); other chains never get a suffix.
+  - The contracts ignore the suffix: events, state, `action_ref`, Merkle roots and
+    bundles are unchanged. Only the transaction hash differs.
+  - **Turn it off:** `new AgentAudit({ ..., builderCode: false })`.
+    **Use your own code:** `builderCode: "bc_yourcode"`.
+  - `getBuilderCode()` returns the code in use (or `null`). Helpers are exported
+    from `./attribution`.
+- No new runtime dependencies.
+
+### Docs
+- README: "Base Builder Code attribution" section.
+- README and package description: evidence wording ("supports / provides evidence
+  for"), the evidence mapping limited to supported articles, batch logging on Base
+  only, "Not legal advice."
+
 ## 1.1.2 — 2026-10-25
 
 ### Fixed
