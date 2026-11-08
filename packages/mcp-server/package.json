@@ -1,6 +1,6 @@
 {
   "name": "@agentauditai/mcp-server",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "MCP server for AgentAudit: audit logging on AuditVault v2 (Base), on-chain incident records and evidence reads for EU AI Act record-keeping.",
   "license": "MIT",
   "repository": {
@@ -20,7 +20,8 @@
     "dist/sdk/src",
     "dist/tools/verify/src",
     "dist/deployments",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "node scripts/clean.js && tsc -p tsconfig.build.json && node scripts/copy-deployments.js",

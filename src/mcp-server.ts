@@ -189,7 +189,7 @@ export function createServer(options: McpServerOptions = optionsFromEnv()): McpS
   }
 
   const server = new McpServer(
-    { name: "agentaudit", version: "2.0.0" },
+    { name: "agentaudit", version: "3.0.0" },
     { capabilities: { tools: {} } }
   );
 
