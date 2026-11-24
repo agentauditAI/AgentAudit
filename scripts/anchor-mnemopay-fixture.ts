@@ -1,18 +1,22 @@
-// AgentAudit AI — anchor the shared MnemoPay fixture bundle on Base mainnet.
-// Anchors fixtures/mnemopay-anchor/v1/bundle.json with MnemoPay's anchorChainBundle()
-// and our AuditVaultAnchorSink (@agentauditai/mnemopay-anchor) → AuditVault v2
-// commitBatch. An anchor proves "this root existed at block T", not who committed it.
+// AgentAudit AI — anchor a shared fixture ChainBundle on Base mainnet.
+// Anchors fixtures/mnemopay-anchor/v1/bundle.json (--fixture mnemopay, default) or
+// fixtures/starclaw-chainbundle/v1/chain-bundle.json (--fixture starclaw) with
+// MnemoPay's anchorChainBundle() and our AuditVaultAnchorSink
+// (@agentauditai/mnemopay-anchor) → AuditVault v2 commitBatch.
+// An anchor proves "this root existed at block T", not who committed it.
 // EU AI Act: Art. 12 (record-keeping), Art. 19 (log retention)
 //
 // Usage (from the repo root):
 //   npx ts-node scripts/anchor-mnemopay-fixture.ts --from 0x…   # dry run (default): no key, sends nothing
 //   npx ts-node scripts/anchor-mnemopay-fixture.ts --send       # broadcasts ONE commitBatch, then polls
+//   add --fixture starclaw to anchor the StarClaw ChainBundle v1 fixture instead
 //
 // Dry run: never reads .env. RPC = BASE_RPC_URL from the process env, else the
 // public https://mainnet.base.org. The from-address comes from --from.
 // Send: reads PRIVATE_KEY and BASE_RPC_URL from .env only (like first-anchor.ts).
 // Neither value is ever printed; error messages are redacted before printing.
 
+import { createHash } from "crypto";
 import { readFileSync, existsSync } from "fs";
 import * as path from "path";
 import { parse as parseDotenv } from "dotenv";
@@ -21,6 +25,7 @@ import {
   AUDIT_VAULT_V2_ABI,
   AuditVaultAnchorSink,
   COMPLIANCE_SCORE,
+  DEFAULT_NAMESPACE,
   anchorContentURI,
   eventCountFromMeta,
   toBytes32Root,
@@ -33,7 +38,6 @@ import { NETWORKS } from "../sdk/src/index";
 
 const ROOT_DIR = path.join(__dirname, "..");
 const ENV_FILE = path.join(ROOT_DIR, ".env");
-const FIXTURE_DIR = path.join(ROOT_DIR, "fixtures/mnemopay-anchor/v1");
 
 const CHAIN = "base";
 const CHAIN_ID = 8453n;
@@ -41,7 +45,6 @@ const VAULT = "0xCeE831070aa9081422f30df5559c125aa47A75DB";
 const PUBLIC_RPC = "https://mainnet.base.org";
 const CONFIRMATIONS = 2;
 const BASESCAN_TX = "https://basescan.org/tx/";
-// expected.json's calldata was produced on anvil by account #0; only the agentId word differs elsewhere
 const FIXTURE_AGENT_ID = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 // OP-stack GasPriceOracle predeploy (Base): L1 data fee for an L2 tx
@@ -72,21 +75,117 @@ function loadSendEnv(): { privateKey: string; rpcUrl: string } {
 
 // ─── Args ─────────────────────────────────────────────────────────────────────
 
-function parseArgs(argv: string[]): { send: boolean; from?: string } {
+type FixtureName = "mnemopay" | "starclaw";
+const FIXTURE_NAMES: readonly FixtureName[] = ["mnemopay", "starclaw"];
+
+function parseArgs(argv: string[]): { send: boolean; from?: string; fixture: FixtureName } {
   let send = false;
   let dry = false;
   let from: string | undefined;
+  let fixture: string = "mnemopay";
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--send") send = true;
     else if (a === "--dry-run") dry = true;
     else if (a === "--from") from = argv[++i];
+    else if (a === "--fixture") fixture = argv[++i];
     else throw new Error(`unknown argument: ${a}`);
+  }
+  if (!FIXTURE_NAMES.includes(fixture as FixtureName)) {
+    throw new Error(`--fixture must be one of: ${FIXTURE_NAMES.join(", ")}`);
   }
   if (send && dry) throw new Error("--send and --dry-run are mutually exclusive");
   if (from !== undefined && !ethers.isAddress(from)) throw new Error("--from must be a valid address");
   if (!send && !from) throw new Error("--dry-run needs --from <address> (no key is read in a dry run)");
-  return { send, from: from && ethers.getAddress(from) };
+  return { send, from: from && ethers.getAddress(from), fixture: fixture as FixtureName };
+}
+
+// ─── Fixtures ─────────────────────────────────────────────────────────────────
+
+interface Fixture {
+  /** repo-relative directory, e.g. fixtures/mnemopay-anchor/v1 */
+  dir: string;
+  file: string;
+  bundle: ChainBundle;
+  producerId: string;
+  namespace: string;
+  /** bare 64-hex root pinned by the fixture */
+  merkleRoot: string;
+  rootLabel: string;
+  eventCount: number;
+  complianceScore: number;
+  /** checks on the file bytes before the bundle is used */
+  fileChecks: Array<{ ok: boolean; what: string }>;
+  /** contentURI pinned by the fixture, when it pins one */
+  contentURI?: string;
+  /** the commitBatch calldata the fixture expects for this from-address */
+  expectedCalldata(from: string): string;
+  calldataLabel: string;
+}
+
+function sha256Hex(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function loadFixture(name: FixtureName): Fixture {
+  if (name === "mnemopay") {
+    const dir = "fixtures/mnemopay-anchor/v1";
+    const file = "bundle.json";
+    const bundle: ChainBundle = JSON.parse(readFileSync(path.join(ROOT_DIR, dir, file), "utf8"));
+    const expected = JSON.parse(readFileSync(path.join(ROOT_DIR, dir, "expected.json"), "utf8"));
+    // expected.json's calldata was produced on anvil by account #0; only the agentId word differs elsewhere
+    const fixtureWord = ethers.zeroPadValue(FIXTURE_AGENT_ID, 32).slice(2).toLowerCase();
+    return {
+      dir,
+      file,
+      bundle,
+      producerId: expected.inputs.producer_id,
+      namespace: expected.inputs.namespace,
+      merkleRoot: expected.derived.merkle_root,
+      rootLabel: "expected.derived.merkle_root",
+      eventCount: expected.derived.event_count,
+      complianceScore: expected.derived.compliance_score,
+      fileChecks: [],
+      contentURI: expected.derived.content_uri,
+      expectedCalldata: (from) =>
+        expected.derived.commit_batch_calldata
+          .toLowerCase()
+          .replace(fixtureWord, ethers.zeroPadValue(from, 32).slice(2).toLowerCase()),
+      calldataLabel: "calldata == expected.derived.commit_batch_calldata with only the agentId word replaced",
+    };
+  }
+
+  // StarClaw ChainBundle v1 (vendored, see its PROVENANCE.md). It pins the file
+  // sha256 and merkle_root only; meta has no event_count, so the sink anchors the
+  // default eventCount 1 — the same values as packages/mnemopay-anchor/test/fixture.starclaw*.test.ts
+  const dir = "fixtures/starclaw-chainbundle/v1";
+  const file = "chain-bundle.json";
+  const raw = readFileSync(path.join(ROOT_DIR, dir, file));
+  const expected = JSON.parse(readFileSync(path.join(ROOT_DIR, dir, "expected.json"), "utf8"));
+  const bundle: ChainBundle = JSON.parse(raw.toString("utf8"));
+  const producerId = "starclaw/fixture";
+  const namespace = DEFAULT_NAMESPACE;
+  const merkleRoot: string = expected.merkle_root;
+  const iface = new ethers.Interface(AUDIT_VAULT_V2_ABI);
+  return {
+    dir,
+    file,
+    bundle,
+    producerId,
+    namespace,
+    merkleRoot,
+    rootLabel: "expected.merkle_root",
+    eventCount: 1,
+    complianceScore: COMPLIANCE_SCORE,
+    fileChecks: [
+      { ok: sha256Hex(raw) === expected.chain_bundle_sha256, what: `sha256(${file}) == expected.chain_bundle_sha256 (${expected.chain_bundle_sha256})` },
+    ],
+    expectedCalldata: (from) =>
+      iface
+        .encodeFunctionData("commitBatch", [from, "0x" + merkleRoot, anchorContentURI(namespace, producerId, bundle.built_at), 1, COMPLIANCE_SCORE])
+        .toLowerCase(),
+    calldataLabel: "calldata == ABI-encoded commitBatch(from, root, contentURI, 1, 0)",
+  };
 }
 
 // ─── Capture: run the real sink, intercept the transaction it would send ─────
@@ -147,15 +246,13 @@ async function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { send, from: fromArg } = parseArgs(process.argv.slice(2));
+  const { send, from: fromArg, fixture: fixtureName } = parseArgs(process.argv.slice(2));
   if (NETWORKS.base.auditVault.toLowerCase() !== VAULT.toLowerCase()) {
     throw new Error(`VAULT ${VAULT} does not match the SDK's Base AuditVault v2 (${NETWORKS.base.auditVault})`);
   }
 
-  const bundle: ChainBundle = JSON.parse(readFileSync(path.join(FIXTURE_DIR, "bundle.json"), "utf8"));
-  const expected = JSON.parse(readFileSync(path.join(FIXTURE_DIR, "expected.json"), "utf8"));
-  const producerId: string = expected.inputs.producer_id;
-  const namespace: string = expected.inputs.namespace;
+  const fixture = loadFixture(fixtureName);
+  const { bundle, producerId, namespace } = fixture;
 
   let rpcUrl: string;
   let wallet: ethers.Wallet | undefined;
@@ -178,32 +275,28 @@ async function main(): Promise<void> {
     if ((await provider.getCode(VAULT)) === "0x") throw new Error(`no contract code at ${VAULT} on Base`);
 
     // 1. The bundle verifies and its root is the fixture's pinned root
-    console.log(`\n── ${send ? "SEND" : "DRY RUN"} — anchor fixtures/mnemopay-anchor/v1 on Base mainnet ──`);
+    console.log(`\n── ${send ? "SEND" : "DRY RUN"} — anchor ${fixture.dir} on Base mainnet ──`);
     console.log(`rpc                ${rpcLabel} (chainId ${chainId})`);
     console.log(`from               ${from}`);
     console.log(`vault (v2)         ${VAULT}\n`);
     console.log("bundle");
-    check(verifyBundle(bundle).ok === true, "verifyBundle(bundle.json) ok (MnemoPay verifier, vendored)");
-    check(bundle.merkle_root === expected.derived.merkle_root, `bundle merkle_root == expected.derived.merkle_root (${bundle.merkle_root})`);
+    for (const c of fixture.fileChecks) check(c.ok, c.what);
+    check(verifyBundle(bundle).ok === true, `verifyBundle(${fixture.file}) ok (MnemoPay verifier, vendored)`);
+    check(bundle.merkle_root === fixture.merkleRoot, `bundle merkle_root == ${fixture.rootLabel} (${bundle.merkle_root})`);
 
     // 2. Calldata exactly as our sink builds it via anchorChainBundle()
     const data = await captureCommitBatch(bundle, producerId, namespace, from, rpcUrl, provider);
     const iface = new ethers.Interface(AUDIT_VAULT_V2_ABI);
     const decoded = iface.decodeFunctionData("commitBatch", data);
-    const root = "0x" + expected.derived.merkle_root;
+    const root = "0x" + fixture.merkleRoot;
     const contentURI = anchorContentURI(namespace, producerId, bundle.built_at);
     console.log("\ncalldata (captured from AuditVaultAnchorSink.anchor via anchorChainBundle)");
     check(decoded.agentId === from, `agentId == from (${from})`);
-    check(decoded.merkleRoot === root && root === toBytes32Root(bundle.merkle_root), `merkleRoot == 0x${expected.derived.merkle_root}`);
-    check(decoded.contentURI === expected.derived.content_uri && decoded.contentURI === contentURI, `contentURI == "${contentURI}"`);
-    check(Number(decoded.eventCount) === expected.derived.event_count && Number(decoded.eventCount) === eventCountFromMeta(bundle.meta), `eventCount == ${expected.derived.event_count}`);
-    check(Number(decoded.complianceScore) === expected.derived.compliance_score && Number(decoded.complianceScore) === COMPLIANCE_SCORE, `complianceScore == ${expected.derived.compliance_score}`);
-    const fixtureWord = ethers.zeroPadValue(FIXTURE_AGENT_ID, 32).slice(2).toLowerCase();
-    const fromWord = ethers.zeroPadValue(from, 32).slice(2).toLowerCase();
-    check(
-      data.toLowerCase() === expected.derived.commit_batch_calldata.toLowerCase().replace(fixtureWord, fromWord),
-      "calldata == expected.derived.commit_batch_calldata with only the agentId word replaced",
-    );
+    check(decoded.merkleRoot === root && root === toBytes32Root(bundle.merkle_root), `merkleRoot == 0x${fixture.merkleRoot}`);
+    check(decoded.contentURI === contentURI && (fixture.contentURI === undefined || decoded.contentURI === fixture.contentURI), `contentURI == "${contentURI}"`);
+    check(Number(decoded.eventCount) === fixture.eventCount && Number(decoded.eventCount) === eventCountFromMeta(bundle.meta), `eventCount == ${fixture.eventCount}`);
+    check(Number(decoded.complianceScore) === fixture.complianceScore && Number(decoded.complianceScore) === COMPLIANCE_SCORE, `complianceScore == ${fixture.complianceScore}`);
+    check(data.toLowerCase() === fixture.expectedCalldata(from), fixture.calldataLabel);
     console.log(`\ncalldata           ${data}`);
 
     // 3. Simulation, gas and cost
@@ -268,7 +361,7 @@ async function main(): Promise<void> {
       }
       const record = await sink.getAnchorRecord(anchorId);
       if (!record) throw new Error("anchored but no on-chain record found");
-      if (record.rootCommitment !== expected.derived.merkle_root) throw new Error("on-chain root differs from the bundle root");
+      if (record.rootCommitment !== fixture.merkleRoot) throw new Error("on-chain root differs from the bundle root");
 
       console.log(`\n✔ anchored          block ${record.blockNumber}, batchIndex ${record.batchIndex}, agentId ${record.agentId}`);
       console.log(`txHash             ${status.txHash}`);
