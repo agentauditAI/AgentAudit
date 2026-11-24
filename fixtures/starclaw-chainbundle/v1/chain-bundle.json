@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "built_at": "2026-11-22T02:36:39.692Z",
+  "meta": {
+    "format": "starclaw-chainbundle/1",
+    "source": "starclaw",
+    "log_records": 5,
+    "log_first_seq": 0,
+    "log_last_hash": "511d82649d5b92be0b4aba470273136773143b4b408df4df2b55790393abe9cc",
+    "public_key_hex": "b67ebe617b4c2e365de3ca3d89fd1a227206ff328f542f369085c135db72fecc",
+    "key_pinned": true
+  },
+  "events": [
+    {
+      "id": "2fc43ed2-cf71-5b55-976f-88f9945bff6b",
+      "sequence": 0,
+      "occurred_at": "2026-11-22T02:36:39.658Z",
+      "kind": "audit.open",
+      "payload": {
+        "data": {
+          "fingerprint": "bb587116909fb39f",
+          "pid": 20292,
+          "publicKey": "b67ebe617b4c2e365de3ca3d89fd1a227206ff328f542f369085c135db72fecc"
+        },
+        "starclaw": {
+          "seq": 0,
+          "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+          "hash": "62a2d286e1a3cbf31fd5bd81003a0898d177a40f933d2a91c19b8ba02bfc8fc0",
+          "sig": "kDB2xfD6eRr2xgz8VadUsA2wRa5s5gp3n7oGlxHEMWDgt2huKjCmurxrrRaFAieN+TezWiO9QQqpJJU8/NPqDw=="
+        }
+      }
+    },
+    {
+      "id": "784b46d9-fba8-51b9-b561-920447f86716",
+      "sequence": 1,
+      "occurred_at": "2026-11-22T02:36:39.673Z",
+      "kind": "goal.received",
+      "payload": {
+        "data": {
+          "goal": "fix the duplicated-last-event bug"
+        },
+        "starclaw": {
+          "seq": 1,
+          "prev": "62a2d286e1a3cbf31fd5bd81003a0898d177a40f933d2a91c19b8ba02bfc8fc0",
+          "hash": "bf697c6fb9124cf4a38c9cc39a59c9f77f8993bc87166e56182782fb6e598865",
+          "sig": "EFqdroRzjJzyVHDpaabn6k2iTf+JqUBjYs7tu+8uyYiWdx7wQ8hacaGnhOrQepm5DNDt2qjTlHvwXy/KIvAGBw=="
+        }
+      }
+    },
+    {
+      "id": "bd923d87-91d4-5c79-ab19-556ef86c59c9",
+      "sequence": 2,
+      "occurred_at": "2026-11-22T02:36:39.679Z",
+      "kind": "approval.decided",
+      "payload": {
+        "data": {
+          "action": "fs.write",
+          "by": "operator",
+          "decision": "approved"
+        },
+        "starclaw": {
+          "seq": 2,
+          "prev": "bf697c6fb9124cf4a38c9cc39a59c9f77f8993bc87166e56182782fb6e598865",
+          "hash": "9a83b16f10fa6239301cc7a294a0709357bffc9f1fd1970f89fe2d84703fd838",
+          "sig": "r7rA4kyXsTXfTA1g+3eRx6G3qLLqNy1tGWkWF8yhTGsfBGPkU8cnpuk0R0RL2keKLnkbrVQkSCjg8Upko08RBA=="
+        }
+      }
+    },
+    {
+      "id": "4f87653a-9246-5516-a63b-0fc0ad22591b",
+      "sequence": 3,
+      "occurred_at": "2026-11-22T02:36:39.687Z",
+      "kind": "llm.usage",
+      "payload": {
+        "data": {
+          "microcents": 1000000
+        },
+        "starclaw": {
+          "seq": 3,
+          "prev": "9a83b16f10fa6239301cc7a294a0709357bffc9f1fd1970f89fe2d84703fd838",
+          "hash": "63011ddfb382e622868929cebea4f4e2403c795ef72d8753f280c4cf903eca79",
+          "sig": "gR0mygRV5ie/8I5C0RJ6zc242b8eVrvPIJKlgXwoNMsLPt/qoJobyBSKuzIe0BpkqQgQqWUHWIF9MQANPfm1Dw=="
+        }
+      }
+    },
+    {
+      "id": "d7ae8ce6-00a5-51e4-89cc-458aec47e2de",
+      "sequence": 4,
+      "occurred_at": "2026-11-22T02:36:39.692Z",
+      "kind": "goal.completed",
+      "payload": {
+        "data": {
+          "kind": "task"
+        },
+        "starclaw": {
+          "seq": 4,
+          "prev": "63011ddfb382e622868929cebea4f4e2403c795ef72d8753f280c4cf903eca79",
+          "hash": "511d82649d5b92be0b4aba470273136773143b4b408df4df2b55790393abe9cc",
+          "sig": "ecYzXyEnF4LQBUWio/oASom6iVxJh64z64zmyHP1rzPFSxJt75Ykq/3nc/2G00Lkm+BOnOHsVIPOQ65HcWpqAA=="
+        }
+      }
+    }
+  ],
+  "merkle_root": "35a592434300017e903062fbff4488a2f3322479626289c37e78984fb54ddd04"
+}
