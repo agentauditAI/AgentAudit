@@ -294,6 +294,7 @@ async function main(): Promise<void> {
     check(decoded.agentId === from, `agentId == from (${from})`);
     check(decoded.merkleRoot === root && root === toBytes32Root(bundle.merkle_root), `merkleRoot == 0x${fixture.merkleRoot}`);
     check(decoded.contentURI === contentURI && (fixture.contentURI === undefined || decoded.contentURI === fixture.contentURI), `contentURI == "${contentURI}"`);
+    check(!decoded.contentURI.includes(producerId), "contentURI has no raw producerId");
     check(Number(decoded.eventCount) === fixture.eventCount && Number(decoded.eventCount) === eventCountFromMeta(bundle.meta), `eventCount == ${fixture.eventCount}`);
     check(Number(decoded.complianceScore) === fixture.complianceScore && Number(decoded.complianceScore) === COMPLIANCE_SCORE, `complianceScore == ${fixture.complianceScore}`);
     check(data.toLowerCase() === fixture.expectedCalldata(from), fixture.calldataLabel);
